@@ -12,7 +12,7 @@ A self-hosted Docker / OCI registry with a polished Next.js interface, shadcn/ui
 - Public/private repository settings, including reserving a private name **before** its first push.
 - Admin user creation, role changes, account disabling, password resets, and audit history.
 - Docker Registry V2 token authentication with short-lived RSA-signed JWTs.
-- PostgreSQL + Drizzle, checked-in migrations, and automatic migrations/bootstrap at startup.
+- PostgreSQL + Drizzle, checked-in migrations, and a dedicated migration/bootstrap job before web startup.
 - Persistent Compose volumes, health checks, non-root app container, and optional Caddy HTTPS deployment.
 - pnpm and Prettier with `semi: false`.
 
@@ -39,10 +39,47 @@ The first administrator is created only when the users table is empty. Changing 
 
 ```sh
 docker compose ps
-docker compose logs -f app registry
+docker compose logs -f web registry
 ```
 
 The initial UI intentionally starts empty. Create repositories or push real images to populate it.
+
+### Images and startup jobs
+
+One multi-stage `Dockerfile` builds three Dockyard images. `DOCKYARD_IMAGE_TAG` defaults to `local`:
+
+| Image                    | Compose service | Responsibility                                                                                          |
+| ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
+| `dockyard/init:local`    | `init`          | Generate missing registry signing material and set volume permissions; exit successfully.               |
+| `dockyard/migrate:local` | `migrate`       | Wait for PostgreSQL, apply Drizzle migrations, and create the first admin if needed; exit successfully. |
+| `dockyard/web:local`     | `web`           | Serve the Next.js UI, API, and token endpoint. Does not run migrations.                                 |
+
+`init` and `migrate` are independent one-off jobs. `Exited (0)` is their normal state, not a failure. The migration image builds without compiling Next.js and has no signing-key volume. Bootstrap admin credentials are passed only to `migrate`, not to `web`.
+
+```text
+init ───────────────────────► registry
+  └─────────────────────────► web
+postgres (healthy) ─► migrate ─► web
+registry (healthy) ──────────► web
+```
+
+Compose waits for both jobs to complete successfully before starting `web`. A failed migration prevents web startup; inspect `docker compose logs migrate`, resolve the error, then retry `docker compose up --build -d`. Existing signing material, database data, and the admin account are preserved on reruns.
+
+To run migrations explicitly against the Compose database:
+
+```sh
+docker compose run --rm migrate
+```
+
+To build the images individually:
+
+```sh
+docker build --target init -t dockyard/init:local .
+docker build --target migrate -t dockyard/migrate:local .
+docker build --target web -t dockyard/web:local .
+```
+
+**Upgrading from the previous `app` / `certificates` service names:** use `docker compose up --build --remove-orphans -d` to remove the old containers. The project name and data-volume names are unchanged, so data and signing keys are reused. Do not pass `-v` to `down`.
 
 ### Push your first image
 
@@ -90,7 +127,7 @@ Disabling an account, changing its role, or resetting its password revokes its w
 
 ## Production HTTPS
 
-The default ports bind **only to `127.0.0.1`**. An optional Caddy override provides TLS for two domains:
+The registry port binds to `127.0.0.1`; the web port is exposed on `0.0.0.0:3000`. Protect the HTTP web port with a firewall or a loopback-only Compose override when using a production reverse proxy. An optional Caddy override provides TLS for two domains:
 
 1. Point DNS for your UI and registry domains at the server.
 2. Set these additional values in `.env`:
@@ -116,7 +153,7 @@ If using your own reverse proxy, set `APP_URL=https://your-ui-domain` and `REGIS
 Compose creates volumes for PostgreSQL, registry blobs, and signing certificates. `docker compose down` preserves them. **Do not use `down -v` unless you intend to permanently delete all data.**
 
 - Back up PostgreSQL with `pg_dump` and back up the registry data and signing certificate volumes. Restore them as a consistent set.
-- Database migrations run before the app starts and use a PostgreSQL advisory lock to coordinate startup.
+- The `migrate` job runs before `web` starts and uses a PostgreSQL advisory lock to coordinate migrations/bootstrap. The web image contains neither the migration bundle nor the SQL migration directory.
 - Deleting a manifest removes **all tags pointing to the same digest**. Blob files are not immediately freed.
 - Run Distribution garbage collection only during a maintenance window with **all registry writes stopped**. See the [official garbage collection guidance](https://distribution.github.io/distribution/about/garbage-collection/). Never run GC alongside active pushes.
 - Generated signing certificates are valid for 10 years. Plan certificate/key rotation before expiry and restart the app and registry together; existing tokens may become invalid. Do not delete the signing volume casually.

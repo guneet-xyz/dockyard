@@ -24,6 +24,14 @@ jobs:
       - run: pnpm test
       - run: pnpm env:generate
       - run: docker compose up --build --wait --wait-timeout 240
+      - name: Verify initialization and migration jobs
+        run: |
+          for service in init migrate; do
+            container=$(docker compose ps --all --quiet "$service")
+            test "$(docker inspect --format '{{.State.Status}}' "$container")" = exited
+            test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = 0
+          done
+          docker compose exec -T web sh -c 'test ! -e dist/migrate.cjs && test ! -d drizzle && test -z "$ADMIN_PASSWORD"'
       - name: Registry integration
         run: |
           set -a

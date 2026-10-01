@@ -1,7 +1,7 @@
 # Optional production reverse proxy with automatically managed HTTPS.
 # docker compose -f compose.yaml -f compose.tls.yaml up --build -d
 services:
-  app:
+  web:
     environment:
       APP_URL: https://${UI_DOMAIN:?Set UI_DOMAIN in .env}
       REGISTRY_PUBLIC_HOST: ${REGISTRY_DOMAIN:?Set REGISTRY_DOMAIN in .env}
@@ -22,7 +22,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      app:
+      web:
         condition: service_healthy
     restart: unless-stopped
 
