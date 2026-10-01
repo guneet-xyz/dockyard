@@ -1,0 +1,28 @@
+version: 0.1
+log:
+  level: info
+  fields:
+    service: registry
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+  delete:
+    enabled: true
+  cache:
+    blobdescriptor: inmemory
+http:
+  addr: :5000
+  headers:
+    X-Content-Type-Options: [nosniff]
+auth:
+  token:
+    realm: http://localhost:3000/api/registry/token
+    service: dockyard-registry
+    issuer: dockyard
+    rootcertbundle: /certs/token.crt
+    signingalgorithms: [RS256]
+health:
+  storagedriver:
+    enabled: true
+    interval: 10s
+    threshold: 3

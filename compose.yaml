@@ -1,0 +1,100 @@
+name: dockyard
+
+services:
+  certificates:
+    build:
+      context: .
+      dockerfile: deploy/certs.Dockerfile
+    volumes:
+      - registry_certs:/certs
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: dockyard
+      POSTGRES_USER: dockyard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U dockyard -d dockyard"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  registry:
+    image: registry:3.1.2
+    depends_on:
+      certificates:
+        condition: service_completed_successfully
+    environment:
+      REGISTRY_AUTH_TOKEN_REALM: ${APP_URL:-http://localhost:3000}/api/registry/token
+      REGISTRY_AUTH_TOKEN_SERVICE: dockyard-registry
+      REGISTRY_AUTH_TOKEN_ISSUER: dockyard
+      REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:?Set REGISTRY_HTTP_SECRET in .env}
+      REGISTRY_NOTIFICATIONS_ENDPOINTS: >-
+        [{"name":"dockyard","url":"http://app:3000/api/registry/events","timeout":"5s","threshold":5,"backoff":"5s","headers":{"Authorization":["Bearer ${REGISTRY_WEBHOOK_SECRET:?Set REGISTRY_WEBHOOK_SECRET in .env}"]},"ignore":{"actions":["pull"]}}]
+    ports:
+      - "${REGISTRY_BIND_ADDRESS:-127.0.0.1}:${REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+      - registry_certs:/certs:ro
+      - ./deploy/registry.yml:/etc/distribution/config.yml:ro
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          "wget -S -O /dev/null http://127.0.0.1:5000/v2/ 2>&1 | grep -q '401 Unauthorized'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      certificates:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://dockyard:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/dockyard
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      REGISTRY_INTERNAL_URL: http://registry:5000
+      REGISTRY_PUBLIC_HOST: ${REGISTRY_PUBLIC_HOST:-localhost:5000}
+      REGISTRY_TOKEN_ISSUER: dockyard
+      REGISTRY_TOKEN_SERVICE: dockyard-registry
+      REGISTRY_TOKEN_KEY_PATH: /certs/token.key
+      REGISTRY_TOKEN_CERT_PATH: /certs/token.crt
+      REGISTRY_WEBHOOK_SECRET: ${REGISTRY_WEBHOOK_SECRET:?Set REGISTRY_WEBHOOK_SECRET in .env}
+      DEFAULT_REPOSITORY_VISIBILITY: ${DEFAULT_REPOSITORY_VISIBILITY:-public}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (at least 12 characters)}
+    ports:
+      - "0.0.0.0:3000:3000"
+    volumes:
+      - registry_certs:/certs:ro
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 20s
+      start_period: 45s
+      retries: 5
+    init: true
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  registry_data:
+  registry_certs:

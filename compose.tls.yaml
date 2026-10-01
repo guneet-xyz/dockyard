@@ -1,0 +1,31 @@
+# Optional production reverse proxy with automatically managed HTTPS.
+# docker compose -f compose.yaml -f compose.tls.yaml up --build -d
+services:
+  app:
+    environment:
+      APP_URL: https://${UI_DOMAIN:?Set UI_DOMAIN in .env}
+      REGISTRY_PUBLIC_HOST: ${REGISTRY_DOMAIN:?Set REGISTRY_DOMAIN in .env}
+  registry:
+    environment:
+      REGISTRY_AUTH_TOKEN_REALM: https://${UI_DOMAIN:?Set UI_DOMAIN in .env}/api/registry/token
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      UI_DOMAIN: ${UI_DOMAIN:?Set UI_DOMAIN in .env}
+      REGISTRY_DOMAIN: ${REGISTRY_DOMAIN:?Set REGISTRY_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

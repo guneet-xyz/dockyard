@@ -1,0 +1,66 @@
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core"
+
+export const roleEnum = pgEnum("role", ["admin", "maintainer", "viewer"])
+export const visibilityEnum = pgEnum("visibility", ["public", "private"])
+
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  username: text("username").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: roleEnum("role").notNull().default("viewer"),
+  enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("sessions_user_idx").on(table.userId),
+    index("sessions_expiry_idx").on(table.expiresAt),
+  ],
+)
+
+export const repositories = pgTable("repositories", {
+  name: text("name").primaryKey(),
+  visibility: visibilityEnum("visibility").notNull().default("public"),
+  description: text("description").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    target: text("target").notNull(),
+    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("audit_created_idx").on(table.createdAt)],
+)
+
+// Shared between app instances; failed credential checks never reset on a restart.
+export const loginAttempts = pgTable("login_attempts", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull().default(1),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+})

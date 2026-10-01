@@ -1,0 +1,8 @@
+node_modules
+.next
+pnpm-lock.yaml
+drizzle/meta
+*.tsbuildinfo
+next-env.d.ts
+test-results
+playwright-report

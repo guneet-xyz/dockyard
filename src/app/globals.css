@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: #092319;
+  --color-secondary: #1a222b;
+  --color-secondary-foreground: #d1d8e0;
+  --color-muted: #171e26;
+  --color-muted-foreground: #8995a6;
+  --color-accent: #1c2530;
+  --color-accent-foreground: #eef2f6;
+  --color-destructive: #f87171;
+  --color-border: #242d38;
+  --color-input: #2c3642;
+  --color-ring: var(--primary);
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+}
+
+:root {
+  color-scheme: dark;
+  --background: #0e1319;
+  --foreground: #edf1f6;
+  --card: #131a22;
+  --primary: #6ce9ba;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+  ::selection {
+    background: #6ce9ba30;
+    color: #b6ffe0;
+  }
+}
+
+.grid-pattern {
+  background-image:
+    linear-gradient(#6ce9ba08 1px, transparent 1px),
+    linear-gradient(90deg, #6ce9ba08 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-enter {
+  animation: enter 250ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+}
