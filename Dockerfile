@@ -3,6 +3,16 @@ RUN apk add --no-cache openssl
 COPY deploy/init-certs.sh /init-certs.sh
 ENTRYPOINT ["sh", "/init-certs.sh"]
 
+FROM caddy:2-alpine AS ingress
+ENV XDG_CONFIG_HOME=/tmp/caddy-config XDG_DATA_HOME=/data
+ENV INGRESS_PUBLIC_URL=http://localhost:3000 WEB_UPSTREAM_URL=http://web:3000 REGISTRY_UPSTREAM_URL=http://registry:5000
+COPY deploy/ingress-entrypoint.sh /usr/local/bin/dockyard-ingress.sh
+RUN rm -f /etc/caddy/Caddyfile
+ENTRYPOINT ["sh", "/usr/local/bin/dockyard-ingress.sh"]
+CMD ["run"]
+HEALTHCHECK --interval=15s --timeout=20s --start-period=10s --retries=5 \
+  CMD wget -q --spider http://127.0.0.1:8081/healthz || exit 1
+
 FROM node:22-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"

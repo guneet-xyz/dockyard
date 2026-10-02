@@ -1,5 +1,0 @@
-import routes.caddy
-
-{$DOCKYARD_DOMAIN} {
-	import dockyard_routes
-}

@@ -1,5 +1,0 @@
-import routes.caddy
-
-:80 {
-	import dockyard_routes
-}

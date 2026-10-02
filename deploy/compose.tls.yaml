@@ -9,10 +9,13 @@ services:
       REGISTRY_AUTH_TOKEN_REALM: https://${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}/api/registry/token
   ingress:
     environment:
-      DOCKYARD_DOMAIN: ${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}
+      INGRESS_PUBLIC_URL: https://${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}
     ports: !override
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile.tls:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+
+volumes:
+  caddy_data:

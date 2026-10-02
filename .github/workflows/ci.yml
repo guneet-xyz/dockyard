@@ -36,6 +36,8 @@ jobs:
             container=$(docker compose --env-file .env -f deploy/compose.yaml ps --quiet "$service")
             test "$(docker inspect --format '{{len .HostConfig.PortBindings}}' "$container")" = 0
           done
+          container=$(docker compose --env-file .env -f deploy/compose.yaml ps --quiet ingress)
+          test "$(docker inspect --format '{{len .Mounts}}' "$container")" = 0
       - name: Registry integration
         run: |
           set -a

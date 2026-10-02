@@ -111,7 +111,15 @@ services:
     restart: unless-stopped
 
   ingress:
-    image: caddy:2-alpine
+    image: dockyard/ingress:${DOCKYARD_IMAGE_TAG:-local}
+    pull_policy: build
+    build:
+      context: ..
+      target: ingress
+    environment:
+      INGRESS_PUBLIC_URL: ${APP_URL:-http://localhost:3000}
+      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:-http://web:3000}
+      REGISTRY_UPSTREAM_URL: ${REGISTRY_UPSTREAM_URL:-http://registry:5000}
     depends_on:
       web:
         condition: service_healthy
@@ -119,11 +127,6 @@ services:
         condition: service_healthy
     ports:
       - "${INGRESS_BIND_ADDRESS:-0.0.0.0}:${INGRESS_PORT:-3000}:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./routes.caddy:/etc/caddy/routes.caddy:ro
-      - caddy_data:/data
-      - caddy_config:/config
     healthcheck:
       test: [CMD, wget, -q, --spider, "http://127.0.0.1:8081/healthz"]
       interval: 15s
@@ -136,5 +139,3 @@ volumes:
   postgres_data:
   registry_data:
   registry_certs:
-  caddy_data:
-  caddy_config:

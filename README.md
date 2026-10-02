@@ -55,17 +55,44 @@ http://localhost:3000
 
 Ingress forwards client authorization, registry challenges, digests, upload locations, and range responses unchanged. Uploads and downloads stream directly to/from Distribution, not through Next.js. It never inserts the web app's internal service token. Next.js decides permissions when issuing short-lived tokens; Distribution verifies and enforces them on every registry operation. A web session cookie alone does not authorize registry access.
 
-`APP_URL` is the single public origin and determines Docker commands shown in the UI and the registry's token realm. Change `INGRESS_PORT` and `APP_URL` together for a different port. `INGRESS_BIND_ADDRESS` defaults to `0.0.0.0`; set it to `127.0.0.1` for localhost-only access. The registry returns relative upload URLs to keep resumable uploads on this same origin. HTTP and HTTPS use the same routing snippet in `deploy/routes.caddy`.
+`APP_URL` is the single public origin and determines Docker commands shown in the UI and the registry's token realm. Change `INGRESS_PORT` and `APP_URL` together for a different port. `INGRESS_BIND_ADDRESS` defaults to `0.0.0.0`; set it to `127.0.0.1` for localhost-only access. The registry returns relative upload URLs to keep resumable uploads on this same origin.
+
+### Environment-configured ingress image
+
+`dockyard/ingress` generates and validates `/tmp/dockyard-Caddyfile` at startup, then runs Caddy with that generated file. No user-managed Caddyfile or config bind mount is needed. The default HTTP service has **no mounts** and regenerates configuration whenever its container starts.
+
+| Image environment variable | Default                 | Purpose                                                                                                                    |
+| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `INGRESS_PUBLIC_URL`       | `http://localhost:3000` | Public origin; `http://` selects development HTTP, `https://` selects managed HTTPS. Compose supplies this from `APP_URL`. |
+| `WEB_UPSTREAM_URL`         | `http://web:3000`       | Root URL for the UI, token endpoint, and internal readiness probe.                                                         |
+| `REGISTRY_UPSTREAM_URL`    | `http://registry:5000`  | Root URL for `/v2` requests.                                                                                               |
+
+Upstream URLs support HTTP/HTTPS, custom ports, and bracketed IPv6 addresses. An optional trailing root slash is normalized. Credentials, non-root paths, query strings, fragments, invalid ports, and configuration syntax are rejected before Caddy starts. HTTPS upstream certificates are verified normally; client authorization is never replaced with an upstream credential.
+
+Inside the image, public HTTP listens on port 80 and HTTPS on port 443. An HTTPS public URL can include an external port, such as `https://dockyard.example.com:8443`; map that host port to container port 443. HTTP redirects use the complete public URL, including its external port. The public origin must also match the web app's `APP_URL` and registry token realm.
+
+To use the image independently on a Docker network:
+
+```sh
+docker run --rm --network your-network -p 3000:80 \
+  -e INGRESS_PUBLIC_URL=http://localhost:3000 \
+  -e WEB_UPSTREAM_URL=http://your-web:3000 \
+  -e REGISTRY_UPSTREAM_URL=http://your-registry:5000 \
+  dockyard/ingress:local
+```
+
+Inspect generated configuration without running a server using `docker run --rm dockyard/ingress:local --print-config`, or validate it using `docker run --rm dockyard/ingress:local validate`. Pass the same environment variables to inspect/validate a custom setup. Environment changes take effect when the container is recreated.
 
 ### Images and startup jobs
 
-One multi-stage `Dockerfile` builds three Dockyard images. `DOCKYARD_IMAGE_TAG` defaults to `local`:
+One multi-stage `Dockerfile` builds four Dockyard images. `DOCKYARD_IMAGE_TAG` defaults to `local`:
 
 | Image                    | Compose service | Responsibility                                                                                          |
 | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
 | `dockyard/init:local`    | `init`          | Generate missing registry signing material and set volume permissions; exit successfully.               |
 | `dockyard/migrate:local` | `migrate`       | Wait for PostgreSQL, apply Drizzle migrations, and create the first admin if needed; exit successfully. |
 | `dockyard/web:local`     | `web`           | Serve the Next.js UI, API, and token endpoint. Does not run migrations.                                 |
+| `dockyard/ingress:local` | `ingress`       | Generate Caddy configuration from URLs, then proxy web and registry traffic on one public origin.       |
 
 `init` and `migrate` are independent one-off jobs. `Exited (0)` is their normal state, not a failure. The migration image builds without compiling Next.js and has no signing-key volume. Bootstrap admin credentials are passed only to `migrate`, not to `web`.
 
@@ -91,9 +118,10 @@ To build the images individually:
 docker build --target init -t dockyard/init:local .
 docker build --target migrate -t dockyard/migrate:local .
 docker build --target web -t dockyard/web:local .
+docker build --target ingress -t dockyard/ingress:local .
 ```
 
-**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d`. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and Caddy volume names are unchanged. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
+**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d`. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and HTTPS certificate-volume names are unchanged. The ingress Caddyfile bind mounts and `caddy_config` mount are gone; generated configuration is ephemeral, and the old unused `caddy_config` volume is not deleted automatically. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
 
 ### Push your first image
 
@@ -157,7 +185,9 @@ The default ingress is HTTP for development. The optional override enables manag
    docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
    ```
 
-Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. Caddy obtains/renews certificates. Its volumes must also be backed up. The override publishes only ports 80/443, replaces the development port mapping, and configures `APP_URL` and the token realm to the HTTPS origin. Signing certificates from `init` are separate from ingress TLS certificates.
+Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. The override publishes only ports 80/443, replaces the development port mapping, and supplies the same HTTPS public URL to web, registry, and ingress. Signing certificates from `init` are separate from ingress TLS certificates.
+
+Managed HTTPS is the only mode that mounts `caddy_data:/data`. This single volume preserves TLS certificate keys and the ACME account across container recreation, avoiding repeated issuance and certificate-authority rate limits. Back it up; do not treat it as a cache. The generated Caddyfile and autosaved configuration are ephemeral and need no persistent config volume. The default HTTP deployment needs no ingress volume at all.
 
 If using your own TLS reverse proxy in front of ingress, bind ingress to localhost and set `APP_URL=https://your-dockyard-domain`. Forward all paths to ingress, allow large bodies and long-running uploads, and leave client `Authorization` headers intact. Do not add an auth redirect that blocks Docker's token-authentication protocol. `APP_URL` must have no trailing slash and must be reachable by both browsers and Docker clients. No separate registry port or domain is needed.
 
