@@ -5,7 +5,7 @@ services:
     image: dockyard/init:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: build
     build:
-      context: .
+      context: ..
       target: init
     volumes:
       - registry_certs:/certs
@@ -30,7 +30,7 @@ services:
     image: dockyard/migrate:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: build
     build:
-      context: .
+      context: ..
       target: migrate
     depends_on:
       postgres:
@@ -58,7 +58,7 @@ services:
     volumes:
       - registry_data:/var/lib/registry
       - registry_certs:/certs:ro
-      - ./deploy/registry.yml:/etc/distribution/config.yml:ro
+      - ./registry.yml:/etc/distribution/config.yml:ro
     healthcheck:
       test:
         [
@@ -74,7 +74,7 @@ services:
     image: dockyard/web:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: build
     build:
-      context: .
+      context: ..
       target: web
     depends_on:
       postgres:

@@ -23,15 +23,15 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm env:generate
-      - run: docker compose up --build --wait --wait-timeout 240
+      - run: docker compose --env-file .env -f deploy/compose.yaml up --build --wait --wait-timeout 240
       - name: Verify initialization and migration jobs
         run: |
           for service in init migrate; do
-            container=$(docker compose ps --all --quiet "$service")
+            container=$(docker compose --env-file .env -f deploy/compose.yaml ps --all --quiet "$service")
             test "$(docker inspect --format '{{.State.Status}}' "$container")" = exited
             test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = 0
           done
-          docker compose exec -T web sh -c 'test ! -e dist/migrate.cjs && test ! -d drizzle && test -z "$ADMIN_PASSWORD"'
+          docker compose --env-file .env -f deploy/compose.yaml exec -T web sh -c 'test ! -e dist/migrate.cjs && test ! -d drizzle && test -z "$ADMIN_PASSWORD"'
       - name: Registry integration
         run: |
           set -a
@@ -47,7 +47,7 @@ jobs:
           TEST_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm test:e2e
       - name: Service logs on failure
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose --env-file .env -f deploy/compose.yaml logs --no-color
       - name: Stop test services
         if: always()
-        run: docker compose down
+        run: docker compose --env-file .env -f deploy/compose.yaml down

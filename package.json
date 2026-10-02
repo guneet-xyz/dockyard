@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:integration": "tsx scripts/smoke-test.ts",
     "test:e2e": "playwright test",
-    "env:generate": "node scripts/setup-env.mjs",
+    "env:generate": "sh deploy/generate-env.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",

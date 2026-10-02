@@ -18,18 +18,16 @@ A self-hosted Docker / OCI registry with a polished Next.js interface, shadcn/ui
 
 ## Start with Docker Compose
 
-Requires Docker Engine and Docker Compose v2. No host Node.js installation is needed.
+Requires Docker Engine and Docker Compose v2. The environment generator also uses OpenSSL. No host Node.js installation is needed. Run these commands from the repository root:
 
 ```sh
-cp .env.example .env
-# Edit .env: replace POSTGRES_PASSWORD, ADMIN_PASSWORD,
-# REGISTRY_HTTP_SECRET, and REGISTRY_WEBHOOK_SECRET with unique random values.
-docker compose up --build -d
+./deploy/generate-env.sh
+docker compose --env-file .env -f deploy/compose.yaml up --build -d
 ```
 
-Use `openssl rand -hex 32` to generate each secret. Keep the PostgreSQL password URL-safe, because Compose embeds it in `DATABASE_URL`. The admin password must be 12–72 characters (at most 72 UTF-8 bytes). `.env` is ignored by Git and excluded from the Docker build.
+The generator writes `.env` at the repository root, regardless of your working directory, with four distinct random secrets and file permissions `0600`. It refuses to overwrite existing files or symlinks, including concurrent invocations, and never prints passwords. Edit non-secret settings such as domains and ports as needed. Pass an optional output path to create a separate environment file, then point Compose at it with `--env-file`. Keep custom environment files outside the repository or add them to `.gitignore` before use.
 
-Alternatively, with Node.js 22 and pnpm installed, **`pnpm env:generate`** creates `.env` with random secrets. It refuses to overwrite an existing file.
+Alternatively, copy `.env.example` to `.env` manually and replace the four secret placeholders. Use `openssl rand -hex 32` for each value; the PostgreSQL password must be URL-safe because Compose embeds it in `DATABASE_URL`. The admin password must be 12–72 characters (at most 72 UTF-8 bytes). `.env` is ignored by Git and excluded from the Docker build. **`pnpm env:generate`** is an alias for the same shell generator.
 
 - **Web UI:** <http://localhost:3000>
 - **Registry:** `localhost:5000`
@@ -38,8 +36,8 @@ Alternatively, with Node.js 22 and pnpm installed, **`pnpm env:generate`** creat
 The first administrator is created only when the users table is empty. Changing `ADMIN_PASSWORD` in `.env` does **not** reset an existing account; use the admin UI.
 
 ```sh
-docker compose ps
-docker compose logs -f web registry
+docker compose --env-file .env -f deploy/compose.yaml ps --all
+docker compose --env-file .env -f deploy/compose.yaml logs -f web registry
 ```
 
 The initial UI intentionally starts empty. Create repositories or push real images to populate it.
@@ -63,12 +61,12 @@ postgres (healthy) ─► migrate ─► web
 registry (healthy) ──────────► web
 ```
 
-Compose waits for both jobs to complete successfully before starting `web`. A failed migration prevents web startup; inspect `docker compose logs migrate`, resolve the error, then retry `docker compose up --build -d`. Existing signing material, database data, and the admin account are preserved on reruns.
+Compose waits for both jobs to complete successfully before starting `web`. A failed migration prevents web startup; inspect `docker compose --env-file .env -f deploy/compose.yaml logs migrate`, resolve the error, then retry the startup command above. Existing signing material, database data, and the admin account are preserved on reruns.
 
 To run migrations explicitly against the Compose database:
 
 ```sh
-docker compose run --rm migrate
+docker compose --env-file .env -f deploy/compose.yaml run --rm migrate
 ```
 
 To build the images individually:
@@ -79,7 +77,7 @@ docker build --target migrate -t dockyard/migrate:local .
 docker build --target web -t dockyard/web:local .
 ```
 
-**Upgrading from the previous `app` / `certificates` service names:** use `docker compose up --build --remove-orphans -d` to remove the old containers. The project name and data-volume names are unchanged, so data and signing keys are reused. Do not pass `-v` to `down`.
+**Upgrading from the previous `app` / `certificates` service names or root-level Compose files:** use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d` to remove the old containers. The project name and data-volume names are unchanged, so data and signing keys are reused. Keep your existing root `.env`; do not regenerate its secrets or pass `-v` to `down`.
 
 ### Push your first image
 
@@ -141,7 +139,7 @@ The registry port binds to `127.0.0.1`; the web port is exposed on `0.0.0.0:3000
 4. Start the HTTPS stack:
 
    ```sh
-   docker compose -f compose.yaml -f compose.tls.yaml up --build -d
+   docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
    ```
 
 Open `https://containers.example.com`, then `docker login registry.example.com`. Caddy obtains/renews certificates. Its volumes must also be backed up.
@@ -150,7 +148,7 @@ If using your own reverse proxy, set `APP_URL=https://your-ui-domain` and `REGIS
 
 ## Persistence and maintenance
 
-Compose creates volumes for PostgreSQL, registry blobs, and signing certificates. `docker compose down` preserves them. **Do not use `down -v` unless you intend to permanently delete all data.**
+Compose creates volumes for PostgreSQL, registry blobs, and signing certificates. `docker compose --env-file .env -f deploy/compose.yaml down` preserves them. **Do not use `down -v` unless you intend to permanently delete all data.**
 
 - Back up PostgreSQL with `pg_dump` and back up the registry data and signing certificate volumes. Restore them as a consistent set.
 - The `migrate` job runs before `web` starts and uses a PostgreSQL advisory lock to coordinate migrations/bootstrap. The web image contains neither the migration bundle nor the SQL migration directory.
@@ -199,7 +197,7 @@ pnpm build
 pnpm start
 ```
 
-Unit tests cover the role matrix, repository names, origin validation, body limits, and presentation utilities. Integration checks exercise real PostgreSQL sessions and actual OCI uploads/pulls/deletions against Distribution:
+Unit tests cover the role matrix, repository names, origin validation, body limits, presentation utilities, and environment generation (POSIX shell and OpenSSL required). Integration checks exercise real PostgreSQL sessions and actual OCI uploads/pulls/deletions against Distribution:
 
 ```sh
 TEST_ADMIN_PASSWORD='your-test-admin-password' pnpm test:integration
