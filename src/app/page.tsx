@@ -27,7 +27,7 @@ export default function OverviewPage() {
   const registry = useRepositories()
   const { data: session } = useSession()
   const repos = registry.data?.repositories ?? []
-  const host = registry.data?.registryHost ?? session?.registryHost ?? "localhost:5000"
+  const host = registry.data?.registryHost ?? session?.registryHost ?? "localhost:3000"
   const guest = !session?.user
   const stats = [
     {

@@ -13,12 +13,13 @@ A self-hosted Docker / OCI registry with a polished Next.js interface, shadcn/ui
 - Admin user creation, role changes, account disabling, password resets, and audit history.
 - Docker Registry V2 token authentication with short-lived RSA-signed JWTs.
 - PostgreSQL + Drizzle, checked-in migrations, and a dedicated migration/bootstrap job before web startup.
-- Persistent Compose volumes, health checks, non-root app container, and optional Caddy HTTPS deployment.
+- One Caddy ingress endpoint for the UI and Docker Registry API, with streaming proxying and optional HTTPS.
+- Persistent Compose volumes, health checks, and non-root web/migration containers.
 - pnpm and Prettier with `semi: false`.
 
 ## Start with Docker Compose
 
-Requires Docker Engine and Docker Compose v2. The environment generator also uses OpenSSL. No host Node.js installation is needed. Run these commands from the repository root:
+Requires Docker Engine and Docker Compose v2 (v2.24.4+ for the HTTPS override). The environment generator also uses OpenSSL. No host Node.js installation is needed. Run these commands from the repository root:
 
 ```sh
 ./deploy/generate-env.sh
@@ -30,17 +31,31 @@ The generator writes `.env` at the repository root, regardless of your working d
 Alternatively, copy `.env.example` to `.env` manually and replace the four secret placeholders. Use `openssl rand -hex 32` for each value; the PostgreSQL password must be URL-safe because Compose embeds it in `DATABASE_URL`. The admin password must be 12–72 characters (at most 72 UTF-8 bytes). `.env` is ignored by Git and excluded from the Docker build. **`pnpm env:generate`** is an alias for the same shell generator.
 
 - **Web UI:** <http://localhost:3000>
-- **Registry:** `localhost:5000`
+- **Docker login/push/pull:** `localhost:3000` — the same ingress endpoint as the UI
 - **First login:** `ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`
 
 The first administrator is created only when the users table is empty. Changing `ADMIN_PASSWORD` in `.env` does **not** reset an existing account; use the admin UI.
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml ps --all
-docker compose --env-file .env -f deploy/compose.yaml logs -f web registry
+docker compose --env-file .env -f deploy/compose.yaml logs -f ingress web registry
 ```
 
 The initial UI intentionally starts empty. Create repositories or push real images to populate it.
+
+### Single-endpoint ingress
+
+Only `ingress` publishes a host port. `web`, `registry`, and PostgreSQL remain reachable only within the Compose network:
+
+```text
+http://localhost:3000
+├── /v2 and /v2/*        → registry:5000 (path preserved)
+└── everything else     → web:3000 (UI, API, token endpoint)
+```
+
+Ingress forwards client authorization, registry challenges, digests, upload locations, and range responses unchanged. Uploads and downloads stream directly to/from Distribution, not through Next.js. It never inserts the web app's internal service token. Next.js decides permissions when issuing short-lived tokens; Distribution verifies and enforces them on every registry operation. A web session cookie alone does not authorize registry access.
+
+`APP_URL` is the single public origin and determines Docker commands shown in the UI and the registry's token realm. Change `INGRESS_PORT` and `APP_URL` together for a different port. `INGRESS_BIND_ADDRESS` defaults to `0.0.0.0`; set it to `127.0.0.1` for localhost-only access. The registry returns relative upload URLs to keep resumable uploads on this same origin. HTTP and HTTPS use the same routing snippet in `deploy/routes.caddy`.
 
 ### Images and startup jobs
 
@@ -59,6 +74,7 @@ init ───────────────────────► re
   └─────────────────────────► web
 postgres (healthy) ─► migrate ─► web
 registry (healthy) ──────────► web
+web + registry (healthy) ────► ingress
 ```
 
 Compose waits for both jobs to complete successfully before starting `web`. A failed migration prevents web startup; inspect `docker compose --env-file .env -f deploy/compose.yaml logs migrate`, resolve the error, then retry the startup command above. Existing signing material, database data, and the admin account are preserved on reruns.
@@ -77,22 +93,22 @@ docker build --target migrate -t dockyard/migrate:local .
 docker build --target web -t dockyard/web:local .
 ```
 
-**Upgrading from the previous `app` / `certificates` service names or root-level Compose files:** use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d` to remove the old containers. The project name and data-volume names are unchanged, so data and signing keys are reused. Keep your existing root `.env`; do not regenerate its secrets or pass `-v` to `down`.
+**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d`. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and Caddy volume names are unchanged. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
 
 ### Push your first image
 
 ```sh
-docker login localhost:5000
+docker login localhost:3000
 docker pull alpine:latest
-docker tag alpine:latest localhost:5000/library/alpine:latest
-docker push localhost:5000/library/alpine:latest
+docker tag alpine:latest localhost:3000/library/alpine:latest
+docker push localhost:3000/library/alpine:latest
 ```
 
 Refresh the repository browser. A public image can be pulled without signing in:
 
 ```sh
-docker logout localhost:5000
-docker pull localhost:5000/library/alpine:latest
+docker logout localhost:3000
+docker pull localhost:3000/library/alpine:latest
 ```
 
 Docker treats localhost as a development exception. For a non-local HTTP registry, configure Docker’s `insecure-registries` explicitly and restart Docker. **Do not use HTTP for passwords over an untrusted network.**
@@ -125,14 +141,13 @@ Disabling an account, changing its role, or resetting its password revokes its w
 
 ## Production HTTPS
 
-The registry port binds to `127.0.0.1`; the web port is exposed on `0.0.0.0:3000`. Protect the HTTP web port with a firewall or a loopback-only Compose override when using a production reverse proxy. An optional Caddy override provides TLS for two domains:
+The default ingress is HTTP for development. The optional override enables managed HTTPS on the **same ingress service**, for a **single domain** shared by the UI, token endpoint, and Docker Registry API:
 
-1. Point DNS for your UI and registry domains at the server.
+1. Point DNS for your Dockyard domain at the server.
 2. Set these additional values in `.env`:
 
    ```dotenv
-   UI_DOMAIN=containers.example.com
-   REGISTRY_DOMAIN=registry.example.com
+   DOCKYARD_DOMAIN=dockyard.example.com
    ```
 
 3. Allow inbound TCP 80/443 (and optionally UDP 443).
@@ -142,9 +157,9 @@ The registry port binds to `127.0.0.1`; the web port is exposed on `0.0.0.0:3000
    docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
    ```
 
-Open `https://containers.example.com`, then `docker login registry.example.com`. Caddy obtains/renews certificates. Its volumes must also be backed up.
+Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. Caddy obtains/renews certificates. Its volumes must also be backed up. The override publishes only ports 80/443, replaces the development port mapping, and configures `APP_URL` and the token realm to the HTTPS origin. Signing certificates from `init` are separate from ingress TLS certificates.
 
-If using your own reverse proxy, set `APP_URL=https://your-ui-domain` and `REGISTRY_PUBLIC_HOST=your-registry-domain` (no scheme). Preserve `Host` and `X-Forwarded-Proto`, allow large bodies and long-running uploads, and proxy the registry directly, not through Next.js. `APP_URL` must have no trailing slash and must be reachable by Docker clients for token exchange.
+If using your own TLS reverse proxy in front of ingress, bind ingress to localhost and set `APP_URL=https://your-dockyard-domain`. Forward all paths to ingress, allow large bodies and long-running uploads, and leave client `Authorization` headers intact. Do not add an auth redirect that blocks Docker's token-authentication protocol. `APP_URL` must have no trailing slash and must be reachable by both browsers and Docker clients. No separate registry port or domain is needed.
 
 ## Persistence and maintenance
 
@@ -177,7 +192,7 @@ openssl req -newkey rsa:4096 -nodes -keyout .certs/token.key \
   -addext 'keyUsage=critical,digitalSignature,keyCertSign'
 ```
 
-Configure your registry with the same certificate, issuer `dockyard`, service `dockyard-registry`, and token realm `$APP_URL/api/registry/token`. `deploy/registry.yml` is the reference configuration. Do not run a second registry against the same writable storage directory.
+Configure your registry with the same certificate, issuer `dockyard`, service `dockyard-registry`, and token realm `$APP_URL/api/registry/token`. `deploy/registry.yml` is the reference configuration. Do not run a second registry against the same writable storage directory. When using a separate development registry instead of ingress, set `REGISTRY_PUBLIC_HOST=localhost:5000` explicitly in your local `.env` so the UI shows that CLI endpoint; production Compose does not pass this development override to `web`.
 
 ```sh
 pnpm db:migrate
@@ -197,13 +212,13 @@ pnpm build
 pnpm start
 ```
 
-Unit tests cover the role matrix, repository names, origin validation, body limits, presentation utilities, and environment generation (POSIX shell and OpenSSL required). Integration checks exercise real PostgreSQL sessions and actual OCI uploads/pulls/deletions against Distribution:
+Unit tests cover the role matrix, repository names, origin validation, body limits, presentation utilities, single-origin configuration, and environment generation (POSIX shell and OpenSSL required). Integration checks exercise real PostgreSQL sessions and registry authorization through ingress, including forged-token rejection, private image access, an 8 MiB streamed PATCH upload, upload continuation URLs, HEAD requests, and byte-range downloads:
 
 ```sh
 TEST_ADMIN_PASSWORD='your-test-admin-password' pnpm test:integration
 ```
 
-Use an **isolated test stack**: the smoke test creates uniquely named users and repositories and leaves those records behind. Override `TEST_APP_URL`, `TEST_REGISTRY_URL`, and `TEST_ADMIN_USERNAME` as needed.
+Use an **isolated test stack**: the smoke test creates uniquely named users, repositories, and blobs and leaves those records behind. `TEST_REGISTRY_URL` defaults to `TEST_APP_URL`, exercising the same ingress origin. Override `TEST_APP_URL` and `TEST_ADMIN_USERNAME` as needed; use `TEST_REGISTRY_URL` only when testing separate local-development services.
 
 Browser checks cover guest navigation, responsive layout, login, repository creation, and admin pages:
 
@@ -215,15 +230,14 @@ TEST_ADMIN_PASSWORD='your-test-admin-password' pnpm test:e2e
 ## Architecture
 
 ```text
-Browser ──► Next.js / shadcn UI ──► PostgreSQL / Drizzle
-                    │
-                    └──► Distribution API (server-only service token)
+Browser / Docker CLI ──► ingress (one public origin)
+                           ├── /v2/* ──► Distribution (verifies scoped JWT)
+                           └── other paths ──► Next.js / shadcn UI
+                                                  ├── PostgreSQL / Drizzle
+                                                  ├── credentials + RBAC ──► signed JWT
+                                                  └── internal registry metadata requests
 
-Docker CLI ──► Distribution registry
-    │              │
-    └──► Next.js token endpoint ──► credentials + RBAC ──► signed JWT
-                   ▲
-                   └── authenticated registry push notifications
+Distribution ──► authenticated push notifications ──► Next.js
 ```
 
 `src/components/ui` contains shadcn-style Radix primitives configured by `components.json`. `src/lib` owns auth, permissions, database access, and the registry client; `src/app/api` enforces those permissions. Image layers stay in Distribution storage, not PostgreSQL.

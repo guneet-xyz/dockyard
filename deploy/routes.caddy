@@ -1,0 +1,30 @@
+(dockyard_routes) {
+	@registry path /v2 /v2/*
+	handle @registry {
+		# Preserve /v2, client Authorization, and registry response headers.
+		# Never substitute the web app's privileged internal service token.
+		reverse_proxy registry:5000 {
+			flush_interval -1
+			transport http {
+				compression off
+			}
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy web:3000
+	}
+}
+
+# Container-local readiness check works in both HTTP and HTTPS mode.
+http://:8081 {
+	bind 127.0.0.1
+	handle /healthz {
+		rewrite * /api/health
+		reverse_proxy web:3000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

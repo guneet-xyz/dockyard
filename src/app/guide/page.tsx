@@ -17,7 +17,7 @@ import {
 
 export default function GuidePage() {
   const { data } = useSession()
-  const host = data?.registryHost ?? "localhost:5000"
+  const host = data?.registryHost ?? "localhost:3000"
   const steps = [
     {
       title: "Connect to your registry",

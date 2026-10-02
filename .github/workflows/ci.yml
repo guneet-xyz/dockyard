@@ -32,12 +32,30 @@ jobs:
             test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = 0
           done
           docker compose --env-file .env -f deploy/compose.yaml exec -T web sh -c 'test ! -e dist/migrate.cjs && test ! -d drizzle && test -z "$ADMIN_PASSWORD"'
+          for service in web registry; do
+            container=$(docker compose --env-file .env -f deploy/compose.yaml ps --quiet "$service")
+            test "$(docker inspect --format '{{len .HostConfig.PortBindings}}' "$container")" = 0
+          done
       - name: Registry integration
         run: |
           set -a
           . ./.env
           set +a
           TEST_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm test:integration
+      - name: Docker CLI through ingress
+        run: |
+          set -a
+          . ./.env
+          set +a
+          registry=$(node -e 'console.log(new URL(process.env.APP_URL).host)')
+          DOCKER_CONFIG=$(mktemp -d "$RUNNER_TEMP/dockyard-docker.XXXXXX")
+          export DOCKER_CONFIG
+          printf '%s' "$ADMIN_PASSWORD" | docker login "$registry" --username "$ADMIN_USERNAME" --password-stdin
+          docker pull alpine:3.23
+          docker tag alpine:3.23 "$registry/ci/alpine:3.23"
+          docker push "$registry/ci/alpine:3.23"
+          docker logout "$registry"
+          docker pull "$registry/ci/alpine:3.23"
       - run: pnpm exec playwright install --with-deps chromium
       - name: Browser tests
         run: |

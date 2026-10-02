@@ -1,5 +1,5 @@
 import routes.caddy
 
-:80 {
+{$DOCKYARD_DOMAIN} {
 	import dockyard_routes
 }

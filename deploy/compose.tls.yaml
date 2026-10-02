@@ -1,31 +1,18 @@
-# Optional production reverse proxy with automatically managed HTTPS.
+# Switch the existing ingress to automatically managed HTTPS on one domain.
 # From the repo root: docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
 services:
   web:
     environment:
-      APP_URL: https://${UI_DOMAIN:?Set UI_DOMAIN in .env}
-      REGISTRY_PUBLIC_HOST: ${REGISTRY_DOMAIN:?Set REGISTRY_DOMAIN in .env}
+      APP_URL: https://${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}
   registry:
     environment:
-      REGISTRY_AUTH_TOKEN_REALM: https://${UI_DOMAIN:?Set UI_DOMAIN in .env}/api/registry/token
-  caddy:
-    image: caddy:2-alpine
+      REGISTRY_AUTH_TOKEN_REALM: https://${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}/api/registry/token
+  ingress:
     environment:
-      UI_DOMAIN: ${UI_DOMAIN:?Set UI_DOMAIN in .env}
-      REGISTRY_DOMAIN: ${REGISTRY_DOMAIN:?Set REGISTRY_DOMAIN in .env}
-    ports:
+      DOCKYARD_DOMAIN: ${DOCKYARD_DOMAIN:?Set DOCKYARD_DOMAIN in .env}
+    ports: !override
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      web:
-        condition: service_healthy
-    restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:
+      - ./Caddyfile.tls:/etc/caddy/Caddyfile:ro

@@ -8,7 +8,7 @@ export const config = {
     return process.env.REGISTRY_INTERNAL_URL ?? "http://registry:5000"
   },
   get registryHost() {
-    return process.env.REGISTRY_PUBLIC_HOST ?? "localhost:5000"
+    return process.env.REGISTRY_PUBLIC_HOST ?? new URL(this.appUrl).host
   },
   get issuer() {
     return process.env.REGISTRY_TOKEN_ISSUER ?? "dockyard"

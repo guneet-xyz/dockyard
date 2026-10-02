@@ -12,6 +12,8 @@ storage:
     blobdescriptor: inmemory
 http:
   addr: :5000
+  # Keep uploads on the client's ingress origin, including when TLS is terminated there.
+  relativeurls: true
   headers:
     X-Content-Type-Options: [nosniff]
 auth:

@@ -161,7 +161,7 @@ export default function RepositoryPage() {
     },
     onError: (error) => toast.error(error.message),
   })
-  const host = session?.registryHost ?? "localhost:5000"
+  const host = session?.registryHost ?? "localhost:3000"
   if (query.isPending)
     return (
       <Card>
