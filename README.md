@@ -19,7 +19,7 @@ A self-hosted Docker / OCI registry with a polished Next.js interface, shadcn/ui
 
 ## Start with Docker Compose
 
-Requires Docker Engine and Docker Compose v2 (v2.24.4+ for the HTTPS override). The environment generator also uses OpenSSL. No host Node.js installation is needed. Run these commands from the repository root:
+Requires Docker Engine and Docker Compose v2. The environment generator also uses OpenSSL. No host Node.js installation is needed. Run these commands from the repository root:
 
 ```sh
 ./deploy/generate-env.sh
@@ -49,7 +49,6 @@ The initial UI intentionally starts empty. Create repositories or push real imag
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy/compose.yaml`       | Image-only deployment: uses cached prebuilt images or pulls missing ones. Contains no build definitions.                                              |
 | `deploy/compose.build.yaml` | Local-build override: builds `dockyard/init`, `dockyard/migrate`, `dockyard/web`, and `dockyard/ingress` from this checkout rather than pulling them. |
-| `deploy/compose.tls.yaml`   | Optional HTTPS override, compatible with either mode.                                                                                                 |
 
 For prebuilt images, set `DOCKYARD_IMAGE_TAG` to an available tag, then run:
 
@@ -80,11 +79,11 @@ Ingress forwards client authorization, registry challenges, digests, upload loca
 
 `dockyard/ingress` generates and validates `/tmp/dockyard-Caddyfile` at startup, then runs Caddy with that generated file. No user-managed Caddyfile or config bind mount is needed. The default HTTP service has **no mounts** and regenerates configuration whenever its container starts.
 
-| Image environment variable | Default                 | Purpose                                                                                                                    |
-| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `INGRESS_PUBLIC_URL`       | `http://localhost:3000` | Public origin; `http://` selects development HTTP, `https://` selects managed HTTPS. Compose supplies this from `APP_URL`. |
-| `WEB_UPSTREAM_URL`         | `http://web:3000`       | Root URL for the UI, token endpoint, and internal readiness probe.                                                         |
-| `REGISTRY_UPSTREAM_URL`    | `http://registry:5000`  | Root URL for `/v2` requests.                                                                                               |
+| Image environment variable | Default                 | Purpose                                                                                                                                                                              |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `INGRESS_PUBLIC_URL`       | `http://localhost:3000` | Origin used by ingress; `http://` selects HTTP, `https://` selects managed HTTPS. Compose defaults this to `APP_URL`, with an explicit override available for an external TLS proxy. |
+| `WEB_UPSTREAM_URL`         | `http://web:3000`       | Root URL for the UI, token endpoint, and internal readiness probe.                                                                                                                   |
+| `REGISTRY_UPSTREAM_URL`    | `http://registry:5000`  | Root URL for `/v2` requests.                                                                                                                                                         |
 
 Upstream URLs support HTTP/HTTPS, custom ports, and bracketed IPv6 addresses. An optional trailing root slash is normalized. Credentials, non-root paths, query strings, fragments, invalid ports, and configuration syntax are rejected before Caddy starts. HTTPS upstream certificates are verified normally; client authorization is never replaced with an upstream credential.
 
@@ -140,7 +139,7 @@ docker build --target web -t dockyard/web:local .
 docker build --target ingress -t dockyard/ingress:local .
 ```
 
-**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml up --build --remove-orphans -d` for source builds. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and HTTPS certificate-volume names are unchanged. The ingress Caddyfile bind mounts and `caddy_config` mount are gone; generated configuration is ephemeral, and the old unused `caddy_config` volume is not deleted automatically. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
+**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml up --build --remove-orphans -d` for source builds. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, and signing-key volume names are unchanged. The ingress Caddyfile bind mounts and `caddy_config` mount are gone; generated configuration is ephemeral, and old unused Caddy volumes are not deleted automatically. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, `APP_BIND_ADDRESS`, `UI_DOMAIN`, `REGISTRY_DOMAIN`, and `DOCKYARD_DOMAIN` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. Configure HTTPS through your deployment as described below. Do not regenerate secrets or pass `-v` to `down`.
 
 ### Push your first image
 
@@ -188,27 +187,20 @@ Disabling an account, changing its role, or resetting its password revokes its w
 
 ## Production HTTPS
 
-The default ingress is HTTP for development. The optional override enables managed HTTPS on the **same ingress service**, for a **single domain** shared by the UI, token endpoint, and Docker Registry API:
+The supplied Compose files run a mount-free HTTP ingress. TLS belongs to your deployment rather than a separate project-provided Compose override.
 
-1. Point DNS for your Dockyard domain at the server.
-2. Set these additional values in `.env`:
+When an external reverse proxy terminates TLS, set:
 
-   ```dotenv
-   DOCKYARD_DOMAIN=dockyard.example.com
-   ```
+```dotenv
+APP_URL=https://dockyard.example.com
+INGRESS_PUBLIC_URL=http://localhost:3000
+INGRESS_BIND_ADDRESS=127.0.0.1
+INGRESS_PORT=3000
+```
 
-3. Allow inbound TCP 80/443 (and optionally UDP 443).
-4. Start the HTTPS stack:
+Forward all paths from the HTTPS endpoint to ingress over HTTP. The web app still uses the HTTPS `APP_URL` for secure cookies, origin checks, Docker commands, and the registry token realm. Both browsers and Docker clients use `dockyard.example.com`. Allow large bodies and long-running uploads, leave client `Authorization` headers intact, and do not add an auth redirect that blocks Docker's token-authentication protocol. `APP_URL` must have no trailing slash. No separate registry port or domain is needed.
 
-   ```sh
-   docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml -f deploy/compose.tls.yaml up --build -d
-   ```
-
-Omit `-f deploy/compose.build.yaml` and `--build` when deploying available prebuilt images. Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. The HTTPS override publishes only ports 80/443, replaces the development port mapping, and supplies the same HTTPS public URL to web, registry, and ingress. Signing certificates from `init` are separate from ingress TLS certificates.
-
-Managed HTTPS is the only mode that mounts `caddy_data:/data`. This single volume preserves TLS certificate keys and the ACME account across container recreation, avoiding repeated issuance and certificate-authority rate limits. Back it up; do not treat it as a cache. The generated Caddyfile and autosaved configuration are ephemeral and need no persistent config volume. The default HTTP deployment needs no ingress volume at all.
-
-If using your own TLS reverse proxy in front of ingress, bind ingress to localhost and set `APP_URL=https://your-dockyard-domain`. Forward all paths to ingress, allow large bodies and long-running uploads, and leave client `Authorization` headers intact. Do not add an auth redirect that blocks Docker's token-authentication protocol. `APP_URL` must have no trailing slash and must be reachable by both browsers and Docker clients. No separate registry port or domain is needed.
+The standalone `dockyard/ingress` image still supports managed HTTPS: set `INGRESS_PUBLIC_URL` to an HTTPS origin and publish container ports 80/443 in your deployment. In that mode, persist `/data` to retain certificate keys and the ACME account across container recreation and avoid certificate-authority rate limits. Generated configuration needs no config volume. Signing certificates from `init` are separate from ingress TLS certificates. Merely changing `APP_URL` to HTTPS does not add a port-443 mapping or certificate persistence to the supplied Compose configuration.
 
 ## Persistence and maintenance
 

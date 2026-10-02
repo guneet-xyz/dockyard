@@ -105,7 +105,7 @@ services:
     image: dockyard/ingress:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: missing
     environment:
-      INGRESS_PUBLIC_URL: ${APP_URL:-http://localhost:3000}
+      INGRESS_PUBLIC_URL: ${INGRESS_PUBLIC_URL:-${APP_URL:-http://localhost:3000}}
       WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:-http://web:3000}
       REGISTRY_UPSTREAM_URL: ${REGISTRY_UPSTREAM_URL:-http://registry:5000}
     depends_on:
