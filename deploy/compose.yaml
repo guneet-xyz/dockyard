@@ -3,10 +3,7 @@ name: dockyard
 services:
   init:
     image: dockyard/init:${DOCKYARD_IMAGE_TAG:-local}
-    pull_policy: build
-    build:
-      context: ..
-      target: init
+    pull_policy: missing
     volumes:
       - registry_certs:/certs
     restart: "no"
@@ -28,10 +25,7 @@ services:
 
   migrate:
     image: dockyard/migrate:${DOCKYARD_IMAGE_TAG:-local}
-    pull_policy: build
-    build:
-      context: ..
-      target: migrate
+    pull_policy: missing
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,10 +64,7 @@ services:
 
   web:
     image: dockyard/web:${DOCKYARD_IMAGE_TAG:-local}
-    pull_policy: build
-    build:
-      context: ..
-      target: web
+    pull_policy: missing
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,10 +103,7 @@ services:
 
   ingress:
     image: dockyard/ingress:${DOCKYARD_IMAGE_TAG:-local}
-    pull_policy: build
-    build:
-      context: ..
-      target: ingress
+    pull_policy: missing
     environment:
       INGRESS_PUBLIC_URL: ${APP_URL:-http://localhost:3000}
       WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:-http://web:3000}

@@ -60,4 +60,4 @@ fi
 
 printf 'Created %s with random secrets and owner-only permissions.\n' "$output"
 printf 'Read ADMIN_PASSWORD in that file to sign in. Keep the file private.\n'
-printf 'Next: docker compose --env-file "%s" -f "%s/compose.yaml" up --build -d\n' "$output" "$script_dir"
+printf 'Next (local build): docker compose --env-file "%s" -f "%s/compose.yaml" -f "%s/compose.build.yaml" up --build -d\n' "$output" "$script_dir" "$script_dir"

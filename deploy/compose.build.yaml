@@ -1,0 +1,26 @@
+# Opt into local source builds instead of pulling the Dockyard images.
+# Combine with compose.yaml; compose.tls.yaml can also be added for HTTPS.
+services:
+  init:
+    pull_policy: build
+    build:
+      context: ..
+      target: init
+
+  migrate:
+    pull_policy: build
+    build:
+      context: ..
+      target: migrate
+
+  web:
+    pull_policy: build
+    build:
+      context: ..
+      target: web
+
+  ingress:
+    pull_policy: build
+    build:
+      context: ..
+      target: ingress

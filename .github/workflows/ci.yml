@@ -23,7 +23,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm env:generate
-      - run: docker compose --env-file .env -f deploy/compose.yaml up --build --wait --wait-timeout 240
+      - run: docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml up --build --wait --wait-timeout 240
       - name: Verify initialization and migration jobs
         run: |
           for service in init migrate; do

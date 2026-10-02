@@ -1,5 +1,5 @@
 # Switch the existing ingress to automatically managed HTTPS on one domain.
-# From the repo root: docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
+# Combine with compose.yaml. Add compose.build.yaml as well for local source builds.
 services:
   web:
     environment:

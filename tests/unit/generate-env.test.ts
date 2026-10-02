@@ -76,6 +76,7 @@ describe("deployment environment generator", () => {
     )
     expect((await stat(output)).mode & 0o777).toBe(0o600)
     expect(result.stdout).toContain("deploy/compose.yaml")
+    expect(result.stdout).toContain("deploy/compose.build.yaml")
     await expect(access(join(workspace, "deploy", ".env"))).rejects.toThrow()
   })
 

@@ -23,7 +23,7 @@ Requires Docker Engine and Docker Compose v2 (v2.24.4+ for the HTTPS override). 
 
 ```sh
 ./deploy/generate-env.sh
-docker compose --env-file .env -f deploy/compose.yaml up --build -d
+docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml up --build -d
 ```
 
 The generator writes `.env` at the repository root, regardless of your working directory, with four distinct random secrets and file permissions `0600`. It refuses to overwrite existing files or symlinks, including concurrent invocations, and never prints passwords. Edit non-secret settings such as domains and ports as needed. Pass an optional output path to create a separate environment file, then point Compose at it with `--env-file`. Keep custom environment files outside the repository or add them to `.gitignore` before use.
@@ -42,6 +42,25 @@ docker compose --env-file .env -f deploy/compose.yaml logs -f ingress web regist
 ```
 
 The initial UI intentionally starts empty. Create repositories or push real images to populate it.
+
+### Compose modes
+
+| File                        | Purpose                                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy/compose.yaml`       | Image-only deployment: uses cached prebuilt images or pulls missing ones. Contains no build definitions.                                              |
+| `deploy/compose.build.yaml` | Local-build override: builds `dockyard/init`, `dockyard/migrate`, `dockyard/web`, and `dockyard/ingress` from this checkout rather than pulling them. |
+| `deploy/compose.tls.yaml`   | Optional HTTPS override, compatible with either mode.                                                                                                 |
+
+For prebuilt images, set `DOCKYARD_IMAGE_TAG` to an available tag, then run:
+
+```sh
+docker compose --env-file .env -f deploy/compose.yaml pull
+docker compose --env-file .env -f deploy/compose.yaml up -d
+```
+
+Those image tags must already exist in the configured registry or your local image cache; this repository does not currently publish images automatically. For a fresh source checkout, use `compose.build.yaml` as shown in the quick start. `--build` alone does not add build definitions to the base file.
+
+The build override inherits image names/tags and all runtime settings from the base file. PostgreSQL and Distribution still use their upstream images. It does not change dependencies, ports, or volumes. Operational commands such as `ps`, `logs`, `exec`, and `down` can use just the base file; include the build override when starting/rebuilding local source images.
 
 ### Single-endpoint ingress
 
@@ -85,7 +104,7 @@ Inspect generated configuration without running a server using `docker run --rm 
 
 ### Images and startup jobs
 
-One multi-stage `Dockerfile` builds four Dockyard images. `DOCKYARD_IMAGE_TAG` defaults to `local`:
+One multi-stage `Dockerfile` builds four Dockyard images through `compose.build.yaml`. `DOCKYARD_IMAGE_TAG` defaults to `local` for source builds; choose an available published tag when using prebuilt images:
 
 | Image                    | Compose service | Responsibility                                                                                          |
 | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |
@@ -121,7 +140,7 @@ docker build --target web -t dockyard/web:local .
 docker build --target ingress -t dockyard/ingress:local .
 ```
 
-**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml up --build --remove-orphans -d`. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and HTTPS certificate-volume names are unchanged. The ingress Caddyfile bind mounts and `caddy_config` mount are gone; generated configuration is ephemeral, and the old unused `caddy_config` volume is not deleted automatically. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
+**Upgrading from previous deployments:** keep your existing root `.env` and secrets, set `APP_URL` to the shared public origin, and use `docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml up --build --remove-orphans -d` for source builds. This replaces direct web/registry port publishing with ingress and removes obsolete `app`, `certificates`, or standalone `caddy` containers. Database, registry, signing-key, and HTTPS certificate-volume names are unchanged. The ingress Caddyfile bind mounts and `caddy_config` mount are gone; generated configuration is ephemeral, and the old unused `caddy_config` volume is not deleted automatically. Docker clients should log in to the new shared hostname/port. `REGISTRY_PORT`, `REGISTRY_BIND_ADDRESS`, `APP_PORT`, and `APP_BIND_ADDRESS` are no longer used. Compose derives the public registry host from `APP_URL`; the old `REGISTRY_PUBLIC_HOST` setting is not passed to `web`. For HTTPS, replace `UI_DOMAIN` and `REGISTRY_DOMAIN` with one `DOCKYARD_DOMAIN`. Do not regenerate secrets or pass `-v` to `down`.
 
 ### Push your first image
 
@@ -182,10 +201,10 @@ The default ingress is HTTP for development. The optional override enables manag
 4. Start the HTTPS stack:
 
    ```sh
-   docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.tls.yaml up --build -d
+   docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.build.yaml -f deploy/compose.tls.yaml up --build -d
    ```
 
-Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. The override publishes only ports 80/443, replaces the development port mapping, and supplies the same HTTPS public URL to web, registry, and ingress. Signing certificates from `init` are separate from ingress TLS certificates.
+Omit `-f deploy/compose.build.yaml` and `--build` when deploying available prebuilt images. Open `https://dockyard.example.com`, then `docker login dockyard.example.com`. The HTTPS override publishes only ports 80/443, replaces the development port mapping, and supplies the same HTTPS public URL to web, registry, and ingress. Signing certificates from `init` are separate from ingress TLS certificates.
 
 Managed HTTPS is the only mode that mounts `caddy_data:/data`. This single volume preserves TLS certificate keys and the ACME account across container recreation, avoiding repeated issuance and certificate-authority rate limits. Back it up; do not treat it as a cache. The generated Caddyfile and autosaved configuration are ephemeral and need no persistent config volume. The default HTTP deployment needs no ingress volume at all.
 
