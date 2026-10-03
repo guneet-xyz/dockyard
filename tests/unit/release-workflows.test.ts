@@ -45,7 +45,7 @@ const root = fileURLToPath(new URL("../../", import.meta.url))
 const load = (path: string) => readFileSync(join(root, path), "utf8")
 const ci = parse(load(".github/workflows/ci.yml")) as Workflow
 const release = parse(load(".github/workflows/release.yml")) as Workflow
-const publish = parse(load(".github/workflows/publish.yml")) as Workflow
+const publisher = release.jobs.publish
 const execute = promisify(execFile)
 const folders: string[] = []
 const sha = "a".repeat(40)
@@ -68,40 +68,41 @@ describe("release and publishing workflow contracts", () => {
     expect(release.jobs.prepare.if).toContain("github.ref == 'refs/heads/main'")
     expect(release.jobs.checks.uses).toBe("./.github/workflows/ci.yml")
     expect(release.jobs.publish.needs).toContain("checks")
-    expect(release.jobs.checks.with?.ref).toBe(release.jobs.publish.with?.ref)
+    expect(release.jobs.checks.with?.ref).toBe(
+      publisher.steps!.find((step) => step.uses === "actions/checkout@v4")?.with?.ref,
+    )
     expect(release.jobs.publish).not.toHaveProperty("secrets")
-    expect(publish.jobs.images.environment).toBe("release")
-    expect(publish.on.workflow_call?.secrets).toEqual({
-      DOCKER_USERNAME: { required: false },
-      DOCKER_PASSWORD: { required: false },
-    })
+    expect(publisher.environment).toBe("release")
+    expect(publisher).not.toHaveProperty("uses")
     expect(
       release.jobs.prepare.steps?.find((step) => step.name?.startsWith("Dispatch quality"))?.run,
     ).toContain('gh workflow run ci.yml --ref "$branch"')
   })
 
   it("builds all Dockerfile targets for both architectures without passing secrets to builds", () => {
-    const targets = publish.jobs.images.strategy!.matrix.target
+    const targets = publisher.strategy!.matrix.target
     expect(targets).toEqual(["init", "migrate", "web", "ingress"])
     for (const target of targets)
       expect(load("Dockerfile")).toMatch(new RegExp(`^FROM .+ AS ${target}$`, "m"))
-    const build = publish.jobs.images.steps!.find((step) => step.id === "build")!
+    const build = publisher.steps!.find((step) => step.id === "build")!
     expect(build.with?.platforms).toBe("linux/amd64,linux/arm64")
     expect(build.with?.target).toBe("${{ matrix.target }}")
     expect(build.with?.push).toBe(true)
     expect(build.with).not.toHaveProperty("build-args")
     expect(build.with).not.toHaveProperty("secrets")
     expect(
-      publish.jobs.images.steps!.find((step) => step.name === "Log in to the Dockyard registry")
-        ?.with?.registry,
+      publisher.steps!.find((step) => step.name === "Log in to the Dockyard registry")?.with
+        ?.registry,
     ).toBe("cr.guneet.dev")
-    const metadata = publish.jobs.images.steps!.find((step) => step.id === "meta")!
+    const metadata = publisher.steps!.find((step) => step.id === "meta")!
     expect(metadata.with?.images).toBe("cr.guneet.dev/dockyard/${{ matrix.target }}")
     expect(metadata.with?.flavor).toBe("latest=false")
     expect(metadata.with?.tags).toContain("type=sha,format=long")
-    expect(metadata.with?.tags).toContain("type=raw,value=edge,enable=${{ inputs.edge }}")
     expect(metadata.with?.tags).toContain(
-      "type=raw,value=latest,enable=${{ inputs.aliases && inputs.version != '' }}",
+      "type=raw,value=edge,enable=${{ needs.prepare.outputs.edge == 'true' }}",
+    )
+    expect(metadata.with?.tags).toContain(
+      "type=raw,value=latest,enable=${{ needs.prepare.outputs.aliases == 'true' && needs.prepare.outputs.version != '' }}",
     )
   })
 
@@ -130,7 +131,7 @@ describe("release and publishing workflow contracts", () => {
 })
 
 describe("publication preflight and early-failure cleanup", () => {
-  const preflight = publish.jobs.images.steps!.find(
+  const preflight = publisher.steps!.find(
     (step) => step.name === "Check release version and registry credentials",
   )!.run!
   const version = JSON.parse(load("package.json")).version as string
