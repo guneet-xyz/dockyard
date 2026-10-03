@@ -71,7 +71,10 @@ describe("release and publishing workflow contracts", () => {
     expect(release.jobs.checks.with?.ref).toBe(release.jobs.publish.with?.ref)
     expect(release.jobs.publish).not.toHaveProperty("secrets")
     expect(publish.jobs.images.environment).toBe("release")
-    expect(publish.on.workflow_call).not.toHaveProperty("secrets")
+    expect(publish.on.workflow_call?.secrets).toEqual({
+      DOCKER_USERNAME: { required: false },
+      DOCKER_PASSWORD: { required: false },
+    })
     expect(
       release.jobs.prepare.steps?.find((step) => step.name?.startsWith("Dispatch quality"))?.run,
     ).toContain('gh workflow run ci.yml --ref "$branch"')

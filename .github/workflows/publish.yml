@@ -19,6 +19,14 @@ on:
         description: Update latest and major/minor release aliases
         type: boolean
         default: false
+    # Register the secret names in the reusable workflow's interface. They are
+    # optional here because the release environment supplies their values in
+    # the images job, rather than the caller passing repository secrets.
+    secrets:
+      DOCKER_USERNAME:
+        required: false
+      DOCKER_PASSWORD:
+        required: false
 
 permissions:
   contents: read
