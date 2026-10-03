@@ -106,12 +106,28 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   await page.getByLabel("Project name", { exact: true }).fill(project)
   await page.getByRole("button", { name: "Create project", exact: true }).click()
   await expect(page.getByRole("heading", { name: project, exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "New image", exact: true }).click()
+  await page.getByLabel("Image name", { exact: true }).fill("init")
+  await page.getByRole("button", { name: "Create image", exact: true }).click()
+  await expect(page.getByRole("heading", { name: `${project}/init`, exact: true })).toBeVisible()
   await page.getByRole("link", { name: "Automation keys", exact: true }).click()
   await expect(page.getByRole("heading", { name: "Automation keys", exact: true })).toBeVisible()
   await page.getByRole("button", { name: "Create key", exact: true }).click()
   await page.getByLabel("Key name", { exact: true }).fill(keyName)
-  await page.getByRole("textbox", { name: "Grant 1 target", exact: true }).fill(`${project}/init`)
-  await page.getByRole("checkbox", { name: "Push", exact: true }).check()
+  await expect(page.getByRole("textbox", { name: "Grant 1 target", exact: true })).toHaveCount(0)
+  await page.getByRole("combobox", { name: "Grant 1 target", exact: true }).click()
+  await page.getByRole("option", { name: `${project}/init`, exact: true }).click()
+  await page.getByRole("combobox", { name: "Grant 1 type", exact: true }).click()
+  await page.getByRole("option", { name: "Project", exact: true }).click()
+  await expect(page.getByRole("combobox", { name: "Grant 1 target", exact: true })).toContainText(
+    "Select project",
+  )
+  await page.getByRole("combobox", { name: "Grant 1 target", exact: true }).click()
+  await page.getByRole("option", { name: project, exact: true }).click()
+  await page.getByRole("button", { name: "Add grant", exact: true }).click()
+  await page.getByRole("combobox", { name: "Grant 2 target", exact: true }).click()
+  await page.getByRole("option", { name: `${project}/init`, exact: true }).click()
+  await page.getByRole("checkbox", { name: "Push", exact: true }).last().check()
   await page.getByRole("button", { name: "Create key", exact: true }).last().click()
   await expect(page.getByRole("heading", { name: "Save your key secret" })).toBeVisible()
   await expect(page.getByLabel("Key secret", { exact: true })).toHaveAttribute("type", "password")
@@ -126,4 +142,59 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   await card.getByRole("button", { name: "Revoke", exact: true }).click()
   await page.getByRole("button", { name: "Revoke key", exact: true }).click()
   await expect(card.getByText("Revoked", { exact: true })).toBeVisible()
+})
+
+test("automation resource selects handle fetch failures and empty collections", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.TEST_ADMIN_PASSWORD,
+    "Set TEST_ADMIN_PASSWORD to enable key browser checks",
+  )
+  const base = process.env.TEST_APP_URL ?? "http://localhost:3000"
+  const login = await page.request.post(`${base}/api/auth/login`, {
+    headers: { Origin: new URL(base).origin },
+    data: {
+      username: process.env.TEST_ADMIN_USERNAME ?? "admin",
+      password: process.env.TEST_ADMIN_PASSWORD!,
+    },
+  })
+  expect(login.status()).toBe(200)
+  await page.route("**/api/projects", (route) =>
+    route.fulfill({
+      json: {
+        projects: [],
+        ungroupedCount: 0,
+        registryHost: new URL(base).host,
+        defaultVisibility: "public",
+        canWrite: true,
+      },
+    }),
+  )
+  let attempts = 0
+  await page.route("**/api/repositories", (route) => {
+    attempts++
+    return attempts <= 2
+      ? route.fulfill({ status: 503, json: { error: "Test unavailable" } })
+      : route.fulfill({
+          json: {
+            repositories: [],
+            registryHost: new URL(base).host,
+            defaultVisibility: "public",
+            canWrite: true,
+          },
+        })
+  })
+  await page.goto("/keys")
+  await page.getByRole("button", { name: "Create key", exact: true }).click()
+  await page.getByLabel("Key name", { exact: true }).fill("empty-resource-test")
+  await expect(page.getByRole("alert").filter({ hasText: "Unable to load images" })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "Grant 1 target", exact: true })).toBeDisabled()
+  await page.getByRole("button", { name: "Retry resources", exact: true }).click()
+  await expect(page.getByText("No images available.", { exact: false })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Create key", exact: true }).last()).toBeDisabled()
+  await page.getByRole("combobox", { name: "Grant 1 type", exact: true }).click()
+  await page.getByRole("option", { name: "Project", exact: true }).click()
+  await expect(page.getByText("No projects available.", { exact: false })).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "Grant 1 target", exact: true })).toBeDisabled()
 })

@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Eye, EyeOff, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/hooks/use-session"
+import { useProjects } from "@/hooks/use-projects"
+import { useRepositories } from "@/hooks/use-repositories"
 import { api } from "@/lib/api-client"
 import type { AccessKeyInfo, KeyAction, KeyGrant } from "@/lib/types"
 import { timeAgo } from "@/lib/utils"
@@ -56,12 +58,29 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
   const [credentials, setCredentials] = useState<Credentials | null>(null)
   const [showSecret, setShowSecret] = useState(false)
   const client = useQueryClient()
+  const projects = useProjects(open)
+  const images = useRepositories(open)
+  function targets(type: KeyGrant["type"]) {
+    return type === "project"
+      ? (projects.data?.projects ?? []).map((project) => project.name)
+      : (images.data?.repositories ?? []).map((image) => image.name)
+  }
+  const validSelections = grants.every(
+    (grant) =>
+      (grant.type === "project" ? projects.isSuccess : images.isSuccess) &&
+      targets(grant.type).includes(grant.target) &&
+      grant.actions.length > 0,
+  )
   function updateGrant(index: number, change: Partial<KeyGrant>) {
     setGrants((current) =>
       current.map((grant, i) => (i === index ? { ...grant, ...change } : grant)),
     )
   }
   async function create() {
+    if (!validSelections) {
+      toast.error("Select an available project or image for every grant.")
+      return
+    }
     setPending(true)
     try {
       // Never store the one-time secret in query/mutation caches or local storage.
@@ -179,14 +198,37 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
                         <SelectItem value="project">Project</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Input
-                      aria-label={`Grant ${index + 1} target`}
-                      placeholder={grant.type === "image" ? "dockyard/init" : "dockyard"}
-                      required
-                      maxLength={255}
+                    <Select
                       value={grant.target}
-                      onChange={(event) => updateGrant(index, { target: event.target.value })}
-                    />
+                      onValueChange={(target) => updateGrant(index, { target })}
+                      disabled={
+                        pending ||
+                        (grant.type === "project"
+                          ? projects.isPending || projects.isError
+                          : images.isPending || images.isError) ||
+                        !targets(grant.type).length
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={`Grant ${index + 1} target`}
+                        className="min-w-0 flex-1 [&_span]:truncate"
+                      >
+                        <SelectValue
+                          placeholder={
+                            (grant.type === "project" ? projects.isPending : images.isPending)
+                              ? "Loading resources…"
+                              : `Select ${grant.type}`
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72 overflow-y-auto">
+                        {targets(grant.type).map((target) => (
+                          <SelectItem key={target} value={target}>
+                            {target}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {grants.length > 1 && (
                       <Button
                         type="button"
@@ -224,12 +266,48 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
                       ? "Applies to every image under this project, including future images."
                       : "Applies only to this exact image, including future tags."}
                   </p>
+                  {(grant.type === "project" ? projects.isSuccess : images.isSuccess) &&
+                    !targets(grant.type).length && (
+                      <p className="text-xs text-muted-foreground">
+                        {grant.type === "project"
+                          ? "No projects available. Create a project first."
+                          : "No images available. Create or reserve an image, or choose a project grant for future images."}
+                      </p>
+                    )}
                 </div>
               ))}
             </div>
+            {(projects.isError || images.isError) && (
+              <div
+                role="alert"
+                className="space-y-2 rounded-md border border-red-400/20 bg-red-400/5 p-3 text-xs text-red-400"
+              >
+                <p>
+                  Unable to load{" "}
+                  {projects.isError && images.isError
+                    ? "projects and images"
+                    : projects.isError
+                      ? "projects"
+                      : "images"}
+                  . Please retry.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (projects.isError) void projects.refetch()
+                    if (images.isError) void images.refetch()
+                  }}
+                >
+                  Retry resources
+                </Button>
+              </div>
+            )}
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Project namespaces must already exist. An image grant can target a future
-              project/image. Include pull with push for typical Docker workflows.
+              Select an existing project or configured image. Reserve an image first for an
+              exact-image first push, or use a project grant for future images. Include pull with
+              push for typical Docker workflows.
             </p>
             <DialogFooter>
               <Button
@@ -240,12 +318,7 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                disabled={
-                  pending || !name || grants.some((grant) => !grant.target || !grant.actions.length)
-                }
-              >
+              <Button type="submit" disabled={pending || !name || !validSelections}>
                 {pending && <Loader2 className="animate-spin" />}Create key
               </Button>
             </DialogFooter>

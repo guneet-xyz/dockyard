@@ -9,7 +9,7 @@ Keys authenticate to the existing registry token endpoint. They **do not** creat
 1. Sign in and open **Automation keys → Create key**.
 2. Give the key a descriptive name, such as `GitHub Actions — release`.
 3. Choose expiration (90 days is the default recommendation).
-4. Add one or more resource grants and select operations.
+4. Add one or more resource grants. Choose **Project** or **Image**, select the resource from its dropdown, and select operations. Changing the grant type clears its previous selection.
 5. Save the generated Docker username and secret in your CI secret manager. The secret is shown **once** and cannot be retrieved from the list later.
 
 | Grant type | Target example  | Applies to                                                                                                                 |
@@ -19,7 +19,7 @@ Keys authenticate to the existing registry token endpoint. They **do not** creat
 
 Allowed operations are `pull`, `push`, and `delete`. Grants are additive: a project pull grant plus an image push grant permits pulling that project's images but pushing only the selected image. There are no wildcard/admin/catalog grants.
 
-Project targets must already exist. An exact `project/image` grant can target a future image in an existing project so a build can perform its first push. Nonconforming legacy image grants must target an existing repository. The `project/image` creation policy remains enforced.
+Project targets must already exist. The UI dropdown lists existing projects and configured/discovered images, including reserved images without tags and existing legacy repository paths. To select an exact image before its first push, create/reserve it from its project page first, or choose a project grant for future images. The management API also permits an exact `project/image` grant for a future image in an existing project. Nonconforming legacy image grants must target an existing repository. The `project/image` creation policy remains enforced.
 
 For typical Docker builds, grant **pull + push** to the intended resource. Cross-repository blob mounting may request pull access to a source image; add that source grant if your workflow needs it. Delete is separate and should be reserved for intentional cleanup jobs.
 

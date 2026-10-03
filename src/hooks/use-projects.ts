@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api-client"
 import type { ProjectOverview } from "@/lib/types"
 
-export function useProjects() {
+export function useProjects(enabled = true) {
   return useQuery({
     queryKey: ["projects"],
+    enabled,
     queryFn: () => api<ProjectOverview>("/api/projects"),
     refetchInterval: 60000,
   })
