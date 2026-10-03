@@ -45,8 +45,12 @@ export async function requireUser(admin = false) {
   return user
 }
 
+export function credentialAttemptKey(username: string) {
+  return hash(`login:${username.toLowerCase()}`)
+}
+
 export async function consumeCredentialAttempt(username: string) {
-  const key = hash(`login:${username.toLowerCase()}`)
+  const key = credentialAttemptKey(username)
   const now = new Date()
   // Atomic upsert avoids parallel requests bypassing the limit.
   const [attempt] = await db()
@@ -66,7 +70,7 @@ export async function consumeCredentialAttempt(username: string) {
 export async function resetCredentialAttempts(username: string) {
   await db()
     .delete(loginAttempts)
-    .where(eq(loginAttempts.key, hash(`login:${username.toLowerCase()}`)))
+    .where(eq(loginAttempts.key, credentialAttemptKey(username)))
 }
 
 export async function checkCredentials(

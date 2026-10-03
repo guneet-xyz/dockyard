@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { createHash, randomBytes } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 
 // Run against an isolated stack: this creates real users and repositories.
 const app = process.env.TEST_APP_URL ?? "http://localhost:3000"
@@ -449,6 +449,218 @@ async function main() {
     "Admin-owned keys cannot obtain raw catalog privileges",
   )
   await rejectedKey(imageKey.username, `${imageKey.secret}wrong`, "Wrong key secret rejected")
+  await check(
+    await browser(`/api/keys/${imageKey.id}/rotate`, "POST"),
+    401,
+    "Guests cannot rotate keys",
+  )
+  await check(
+    await browser(`/api/keys/${imageKey.id}/rotate`, "POST", undefined, viewerCookie),
+    404,
+    "Other users cannot rotate keys",
+  )
+  await check(
+    await browser(
+      `/api/keys/${imageKey.id}/rotate`,
+      "POST",
+      undefined,
+      maintainerCookie,
+      "http://evil.example",
+    ),
+    403,
+    "Cross-origin rotation blocked",
+  )
+  await check(
+    await fetch(`${app}/api/keys/${imageKey.id}/rotate`, {
+      method: "POST",
+      headers: { Cookie: maintainerCookie },
+    }),
+    403,
+    "Rotation requires Origin",
+  )
+  await check(
+    await browser("/api/keys/not-a-uuid/rotate", "POST", undefined, maintainerCookie),
+    400,
+    "Invalid rotation ID rejected",
+  )
+  await check(
+    await browser(`/api/keys/${randomUUID()}/rotate`, "POST", undefined, maintainerCookie),
+    404,
+    "Missing rotation key rejected",
+  )
+  await check(
+    await fetch(`${app}/api/keys/${imageKey.id}/rotate`, {
+      method: "POST",
+      headers: {
+        Origin: app,
+        Authorization: `Basic ${Buffer.from(`${imageKey.username}:${imageKey.secret}`).toString("base64")}`,
+      },
+    }),
+    401,
+    "Keys cannot rotate themselves",
+  )
+  const keysBeforeRotation = await check(
+    await browser("/api/keys", "GET", undefined, maintainerCookie),
+    200,
+    "Key metadata before rotation",
+  )
+  const originalMetadata = keysBeforeRotation.keys.find(
+    (key: { id: string }) => key.id === imageKey.id,
+  )
+  const originalSecret = imageKey.secret
+  const rotationResponse = await browser(
+    `/api/keys/${imageKey.id}/rotate`,
+    "POST",
+    undefined,
+    maintainerCookie,
+  )
+  assert.equal(rotationResponse.headers.get("cache-control"), "no-store")
+  assertions++
+  const rotated = await check(rotationResponse, 200, "Owner rotates image key")
+  assert.deepEqual({ ...rotated, secret: undefined }, { ...imageKey, secret: undefined })
+  assert.ok(rotated.secret !== originalSecret, "Rotation must produce a different secret")
+  assert.ok(!("secretHash" in rotated), "Rotation must not return the stored hash")
+  assertions += 3
+  const keysAfterRotation = await check(
+    await browser("/api/keys", "GET", undefined, maintainerCookie),
+    200,
+    "Key metadata after rotation",
+  )
+  const rotatedMetadata = keysAfterRotation.keys.find(
+    (key: { id: string }) => key.id === imageKey.id,
+  )
+  assert.ok(rotatedMetadata.rotatedAt)
+  assert.equal(rotatedMetadata.lastUsedAt, null)
+  assert.deepEqual(
+    { ...rotatedMetadata, rotatedAt: null, lastUsedAt: originalMetadata.lastUsedAt },
+    originalMetadata,
+  )
+  assert.ok(!("secret" in rotatedMetadata) && !("secretHash" in rotatedMetadata))
+  assertions += 4
+  await rejectedKey(imageKey.username, originalSecret, "Old secret rejected after rotation")
+  imageKey.secret = rotated.secret
+  const replacementToken = await token(
+    `repository:${repo}:pull,push,delete`,
+    imageKey.username,
+    imageKey.secret,
+  )
+  const replacementClaims = JSON.parse(
+    Buffer.from(replacementToken.split(".")[1], "base64url").toString(),
+  )
+  assert.deepEqual(replacementClaims.access[0].actions, ["pull", "push"])
+  assert.equal(replacementClaims.sub, imageKey.username)
+  assertions += 2
+  await check(
+    await registryCall(`/v2/${repo}/blobs/uploads/`, replacementToken, "POST"),
+    202,
+    "Replacement secret can push through registry ingress",
+  )
+  // Rotation is also an authenticated recovery path for a locked-out active credential.
+  for (let attempt = 0; attempt < 20; attempt++)
+    await rejectedKey(viewerKey.username, "dk_wrong", "Wrong viewer secret rejected")
+  await check(
+    await fetch(`${app}/api/registry/token?service=dockyard-registry`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${viewerKey.username}:${viewerKey.secret}`).toString("base64")}`,
+      },
+    }),
+    429,
+    "Key authentication rate limit enforced",
+  )
+  const rotatedViewerKey = await check(
+    await browser(`/api/keys/${viewerKey.id}/rotate`, "POST", undefined, viewerCookie),
+    200,
+    "Viewer rotates own key and clears attempt limit",
+  )
+  assert.deepEqual({ ...rotatedViewerKey, secret: undefined }, { ...viewerKey, secret: undefined })
+  assertions++
+  viewerKey.secret = rotatedViewerKey.secret
+  await token(`repository:${privateRepo}:pull`, viewerKey.username, viewerKey.secret)
+  const rotatedProjectKey = await check(
+    await browser(
+      `/api/keys/${projectKey.id.toUpperCase()}/rotate`,
+      "POST",
+      undefined,
+      adminCookie,
+    ),
+    200,
+    "Admin rotates another user's project key",
+  )
+  assert.deepEqual(
+    { ...rotatedProjectKey, secret: undefined },
+    { ...projectKey, secret: undefined },
+  )
+  assertions++
+  await rejectedKey(
+    projectKey.username,
+    projectKey.secret,
+    "Admin rotation invalidates previous project secret",
+  )
+  projectKey.secret = rotatedProjectKey.secret
+  await token(`repository:${repo}:pull,push`, projectKey.username, projectKey.secret)
+  const concurrentKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `concurrent-${suffix}`,
+        grants: [{ type: "image", target: repo, actions: ["pull"] }],
+        expiresAt: null,
+      },
+      maintainerCookie,
+    ),
+    201,
+    "Create non-expiring concurrent rotation key",
+  )
+  const parallelRotations = await Promise.all(
+    [0, 1].map(async () =>
+      check(
+        await browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+        200,
+        "Concurrent rotation commits atomically",
+      ),
+    ),
+  )
+  assert.ok(
+    parallelRotations.every(
+      (key) => key.expiresAt === null && key.username === concurrentKey.username,
+    ),
+  )
+  const parallelAuthentication = await Promise.all(
+    parallelRotations.map((key) =>
+      fetch(`${app}/api/registry/token?service=dockyard-registry`, {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${key.username}:${key.secret}`).toString("base64")}`,
+        },
+      }),
+    ),
+  )
+  assert.deepEqual(
+    parallelAuthentication.map((response) => response.status).sort(),
+    [200, 401],
+    "Only the last committed rotation secret remains usable",
+  )
+  assertions += 2
+  const racingResponses = await Promise.all([
+    browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    browser(`/api/keys/${concurrentKey.id}`, "DELETE", undefined, adminCookie),
+  ])
+  assert.ok([200, 409].includes(racingResponses[0].status))
+  await check(racingResponses[1], 200, "Concurrent revocation commits")
+  const racingCredentials =
+    racingResponses[0].status === 200 ? await racingResponses[0].json() : null
+  if (racingCredentials)
+    await rejectedKey(
+      racingCredentials.username,
+      racingCredentials.secret,
+      "Concurrent rotation cannot revive a revoked key",
+    )
+  await check(
+    await browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    409,
+    "Revoked concurrent key remains unrotatable",
+  )
+  assertions++
   const expiringKey = await check(
     await browser(
       "/api/keys",
@@ -475,11 +687,21 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 4500))
   await rejectedKey(expiringKey.username, expiringKey.secret, "Expired key authentication rejected")
   await check(
+    await browser(`/api/keys/${expiringKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    409,
+    "Expired keys cannot rotate",
+  )
+  await check(
     await browser(`/api/keys/${adminKey.id}`, "DELETE", {}, adminCookie),
     200,
     "Revoke scoped admin key",
   )
   await rejectedKey(adminKey.username, adminKey.secret, "Revoked key authentication rejected")
+  await check(
+    await browser(`/api/keys/${adminKey.id}/rotate`, "POST", undefined, adminCookie),
+    409,
+    "Revoked keys cannot rotate",
+  )
   await check(
     await browser(
       "/api/repositories",
@@ -831,6 +1053,11 @@ async function main() {
   )
   await rejectedKey(imageKey.username, imageKey.secret, "Disabled owner blocks existing keys")
   await check(
+    await browser(`/api/keys/${imageKey.id}/rotate`, "POST", undefined, adminCookie),
+    409,
+    "Disabled owner's key cannot rotate even for admin",
+  )
+  await check(
     await browser(
       "/api/repositories",
       "POST",
@@ -846,7 +1073,31 @@ async function main() {
     },
   })
   await check(badToken, 401, "Disabled Docker credentials rejected")
-  await check(await browser("/api/activity", "GET", undefined, adminCookie), 200, "Admin audit log")
+  const activity = await check(
+    await browser("/api/activity", "GET", undefined, adminCookie),
+    200,
+    "Admin audit log",
+  )
+  const rotationEvents = activity.events.filter(
+    (event: { action: string }) => event.action === "key.rotate",
+  )
+  assert.ok(
+    rotationEvents.some(
+      (event: { actor: string; target: string }) =>
+        event.actor === username && event.target === projectKey.name,
+    ),
+  )
+  assert.ok(
+    rotationEvents.some(
+      (event: { actor: string; target: string }) =>
+        event.actor === maintainer && event.target === imageKey.name,
+    ),
+  )
+  assert.ok(
+    !JSON.stringify(activity).includes(imageKey.secret) &&
+      !JSON.stringify(activity).includes(originalSecret),
+  )
+  assertions += 3
   await check(await browser("/api/auth/logout", "POST", {}, viewerCookie), 200, "Logout")
   const me = await check(
     await browser("/api/auth/me", "GET", undefined, viewerCookie),

@@ -2,16 +2,17 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Download, Eye, EyeOff, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { KeyRound, Loader2, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/hooks/use-session"
 import { useProjects } from "@/hooks/use-projects"
 import { useRepositories } from "@/hooks/use-repositories"
 import { api } from "@/lib/api-client"
-import { keyExportFilename, serializeKeyCredentials, type KeyCredentials } from "@/lib/key-export"
+import type { KeyCredentials } from "@/lib/key-export"
+import { KeyCredentialsDialog } from "@/components/key-credentials-dialog"
 import type { AccessKeyInfo, KeyAction, KeyGrant } from "@/lib/types"
 import { timeAgo } from "@/lib/utils"
-import { CommandBlock, CopyButton, ErrorState, TableSkeleton } from "@/components/shared"
+import { ErrorState, TableSkeleton } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,7 +51,6 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
     { type: "image", target: "", actions: ["pull"] },
   ])
   const [credentials, setCredentials] = useState<KeyCredentials | null>(null)
-  const [showSecret, setShowSecret] = useState(false)
   const client = useQueryClient()
   const projects = useProjects(open)
   const images = useRepositories(open)
@@ -91,7 +91,6 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
       })
       setOpen(false)
       setCredentials(created)
-      setShowSecret(false)
       setName("")
       setGrants([{ type: "image", target: "", actions: ["pull"] }])
       client.invalidateQueries({ queryKey: ["keys"] })
@@ -100,24 +99,6 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
       toast.error((error as Error).message)
     } finally {
       setPending(false)
-    }
-  }
-  function downloadCredentials() {
-    if (!credentials) return
-    const blob = new Blob([serializeKeyCredentials(credentials)], {
-      type: "application/json;charset=utf-8",
-    })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    try {
-      anchor.href = url
-      anchor.download = keyExportFilename(credentials.id)
-      document.body.appendChild(anchor)
-      anchor.click()
-    } finally {
-      anchor.remove()
-      // Release the credential-bearing blob once the browser has started the download.
-      setTimeout(() => URL.revokeObjectURL(url), 0)
     }
   }
   return (
@@ -337,93 +318,9 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={Boolean(credentials)}
-        onOpenChange={(value) => {
-          if (!value) {
-            setCredentials(null)
-            setShowSecret(false)
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Save your key secret</DialogTitle>
-            <DialogDescription>
-              This is the only time Dockyard will show the secret. Store it in your CI secret
-              manager; it cannot be retrieved later.
-            </DialogDescription>
-          </DialogHeader>
-          {credentials && (
-            <div className="min-w-0 space-y-4">
-              <div className="min-w-0 space-y-2">
-                <Label htmlFor="key-username">Docker username</Label>
-                <div className="flex min-w-0 items-center gap-2">
-                  <Input
-                    id="key-username"
-                    value={credentials.username}
-                    readOnly
-                    className="min-w-0 flex-1 font-mono text-xs"
-                  />
-                  <CopyButton value={credentials.username} className="shrink-0" />
-                </div>
-              </div>
-              <div className="min-w-0 space-y-2">
-                <Label htmlFor="key-secret">Key secret</Label>
-                <div className="flex min-w-0 items-center gap-2">
-                  <Input
-                    id="key-secret"
-                    value={credentials.secret}
-                    type={showSecret ? "text" : "password"}
-                    readOnly
-                    className="min-w-0 flex-1 font-mono text-xs"
-                    autoComplete="off"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0"
-                    onClick={() => setShowSecret(!showSecret)}
-                    aria-label={showSecret ? "Hide key secret" : "Show key secret"}
-                  >
-                    {showSecret ? <EyeOff /> : <Eye />}
-                  </Button>
-                  <CopyButton value={credentials.secret} className="shrink-0" />
-                </div>
-              </div>
-              <CommandBlock
-                command={`printf '%s' "$DOCKYARD_KEY" | docker login ${credentials.registryHost} --username ${credentials.username} --password-stdin`}
-              />
-              <p className="text-xs text-muted-foreground">
-                Set DOCKYARD_KEY to the secret in your CI environment. Do not put the secret
-                directly in a command or commit it to your repository.
-              </p>
-              <p className="text-xs text-amber-300">
-                Downloaded JSON includes the unencrypted key secret. Keep it private and out of Git.
-              </p>
-              <DialogFooter className="flex-col sm:flex-row">
-                <Button
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={downloadCredentials}
-                >
-                  <Download />
-                  Download JSON
-                </Button>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    setCredentials(null)
-                    setShowSecret(false)
-                  }}
-                >
-                  I saved the secret
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {credentials && (
+        <KeyCredentialsDialog credentials={credentials} onClose={() => setCredentials(null)} />
+      )}
     </>
   )
 }
@@ -437,6 +334,27 @@ function KeysView() {
     refetchInterval: 30000,
   })
   const [revoking, setRevoking] = useState<AccessKeyInfo | null>(null)
+  const [rotating, setRotating] = useState<AccessKeyInfo | null>(null)
+  const [rotationPending, setRotationPending] = useState(false)
+  const [rotatedCredentials, setRotatedCredentials] = useState<KeyCredentials | null>(null)
+  async function rotate() {
+    if (!rotating || rotationPending) return
+    setRotationPending(true)
+    try {
+      // As with creation, keep one-time secrets out of React Query caches/storage.
+      const credentials = await api<KeyCredentials>(`/api/keys/${rotating.id}/rotate`, {
+        method: "POST",
+      })
+      setRotating(null)
+      setRotatedCredentials(credentials)
+      client.invalidateQueries({ queryKey: ["keys"] })
+      toast.success("Key rotated. Update your CI secret now.")
+    } catch (error) {
+      toast.error((error as Error).message)
+    } finally {
+      setRotationPending(false)
+    }
+  }
   const revoke = useMutation({
     mutationFn: (id: string) => api(`/api/keys/${id}`, { method: "DELETE" }),
     onSuccess: () => {
@@ -463,7 +381,7 @@ function KeysView() {
           <p className="text-xs leading-relaxed text-muted-foreground">
             Each key has its own project/image grants and is capped by its owner’s current role.
             Disabling the owner blocks their keys. Registry tokens already issued can remain valid
-            for up to five minutes after revocation; expiration can shorten that window.
+            for up to five minutes after rotation or revocation; expiration can shorten that window.
           </p>
         </CardContent>
       </Card>
@@ -489,33 +407,47 @@ function KeysView() {
             const status = key.status
             return (
               <Card key={key.id}>
-                <CardHeader className="flex-row items-start justify-between gap-3">
-                  <div>
+                <CardHeader className="items-start justify-between gap-3 sm:flex-row">
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-3">
-                      <CardTitle className="text-sm">{key.name}</CardTitle>
+                      <CardTitle className="break-all text-sm">{key.name}</CardTitle>
                       <Badge variant={status === "Active" ? "default" : "secondary"}>
                         {status}
                       </Badge>
                       {key.ownerId !== session.data?.user?.id && (
-                        <Badge variant="outline">{key.ownerUsername}</Badge>
+                        <Badge variant="outline" className="max-w-full break-all whitespace-normal">
+                          {key.ownerUsername}
+                        </Badge>
                       )}
                     </div>
                     <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">
                       {key.username}
                     </p>
                   </div>
-                  {!key.revokedAt && (
-                    <Button variant="destructive" size="sm" onClick={() => setRevoking(key)}>
-                      Revoke
-                    </Button>
-                  )}
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {status === "Active" && (
+                      <Button variant="outline" size="sm" onClick={() => setRotating(key)}>
+                        <RefreshCw />
+                        Rotate
+                      </Button>
+                    )}
+                    {!key.revokedAt && (
+                      <Button variant="destructive" size="sm" onClick={() => setRevoking(key)}>
+                        Revoke
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {key.grants.map((grant, index) => (
-                      <Badge key={index} variant="outline" className="py-1.5">
+                      <Badge
+                        key={index}
+                        variant="outline"
+                        className="max-w-full flex-wrap whitespace-normal py-1.5"
+                      >
                         <span className="capitalize">{grant.type}</span>
-                        <span className="font-mono">{grant.target}</span>
+                        <span className="min-w-0 break-all font-mono">{grant.target}</span>
                         <span className="text-primary">{grant.actions.join(", ")}</span>
                       </Badge>
                     ))}
@@ -523,6 +455,7 @@ function KeysView() {
                   <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-muted-foreground">
                     <span>Created {timeAgo(key.createdAt)}</span>
                     <span>Last authenticated {timeAgo(key.lastUsedAt)}</span>
+                    {key.rotatedAt && <span>Last rotated {timeAgo(key.rotatedAt)}</span>}
                     <span>
                       {key.expiresAt
                         ? `Expires ${new Date(key.expiresAt).toLocaleDateString()}`
@@ -534,6 +467,38 @@ function KeysView() {
             )
           })}
         </div>
+      )}
+      <Dialog
+        open={Boolean(rotating)}
+        onOpenChange={(value) => {
+          if (!value && !rotationPending) setRotating(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rotate this key?</DialogTitle>
+            <DialogDescription>
+              Replace the secret for {rotating?.name}. The username, owner, grants, and expiration
+              stay unchanged. The old secret stops authenticating immediately, so update your CI
+              secret manager after saving the replacement. Previously issued registry tokens may
+              remain valid for up to five minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={rotationPending} onClick={() => setRotating(null)}>
+              Cancel
+            </Button>
+            <Button disabled={rotationPending} onClick={() => void rotate()}>
+              {rotationPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}Rotate key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {rotatedCredentials && (
+        <KeyCredentialsDialog
+          credentials={rotatedCredentials}
+          onClose={() => setRotatedCredentials(null)}
+        />
       )}
       <Dialog
         open={Boolean(revoking)}

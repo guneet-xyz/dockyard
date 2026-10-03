@@ -66,7 +66,7 @@ Grant only the exact image or project this workflow publishes. Use separate keys
 
 ## Ownership and role limits
 
-- Every key belongs to the user who created it. That owner can list/revoke their keys; admins can list/revoke all keys. Secrets and secret hashes are never returned in key listings.
+- Every key belongs to the user who created it. That owner can list/rotate/revoke their keys; admins can list/rotate/revoke all keys. Secrets and secret hashes are never returned in key listings.
 - Viewers can create only pull keys. Maintainers/admins can create pull/push/delete grants, but the key never gains browser/admin privileges.
 - Effective registry actions are the intersection of **requested actions**, **key resource grants**, and the owner's **current role**. A demoted owner cannot keep write access through a previously created key.
 - Disabling the owner prevents future authentication with all their keys. Deleting an owner deletes their keys through the database foreign key.
@@ -77,18 +77,22 @@ Project/image settings and account roles are checked when issuing tokens. Caddy 
 
 ## Expiration, revocation, and rotation
 
-Keys can expire or be explicitly revoked. Creation defaults to 90 days; the API permits a future expiry up to one year, or `null` for no expiration. Use finite expiry wherever possible. The list shows the key owner, granted resources/actions, last successful authentication, and status.
+Keys can expire or be explicitly revoked. Creation defaults to 90 days; the API permits a future expiry up to one year, or `null` for no expiration. Use finite expiry wherever possible. The list shows the key owner, granted resources/actions, last successful authentication, last rotation, and status. Rotation resets the last-authenticated timestamp for the replacement secret.
 
 Revocation blocks **new token requests** immediately. Distribution validates already-issued JWTs without calling back to the app, so previously issued authorization can remain valid for up to five minutes. JWT expiry is also capped at the key's expiry: it cannot outlive an expiring key. Previously downloaded images cannot be revoked.
 
-To rotate a key:
+To rotate an active key in place:
 
-1. Create a replacement with the same or narrower grants.
-2. Update the CI secret manager and confirm the workflow succeeds.
-3. Revoke the old key from the UI.
-4. Allow the token-expiry window before assuming all old authorization is gone.
+1. Open **Automation keys**, choose **Rotate** on the key, and confirm the warning.
+2. Save the new secret from the one-time dialog, or use **Download JSON**. The key ID, Docker username, owner, name, grants, and expiration stay unchanged; rotation does not extend its lifetime or permissions.
+3. Update the CI secret manager immediately and sign in again with Docker. The old secret cannot obtain new registry tokens once rotation succeeds. There is **no overlap/grace period** for the old secret.
+4. Confirm the workflow succeeds. Already-issued registry JWTs may remain valid for up to five minutes, capped by the key's expiry.
 
-Changing a user's password does not rotate their automation keys. Revoke those separately if a key or account is compromised. Key creation/revocation is recorded in audit history; registry pushes identify the key username in the actor field.
+Only an active key can rotate: expired, revoked, and disabled-owner keys are rejected. If you lose the replacement secret, rotate the active key again; it cannot be recovered. Concurrent rotations are serialized, and only the most recently committed secret remains usable. Coordinate rotation with other operators.
+
+For a zero-downtime rollout, create a separate key with the same or narrower grants, update and verify the workflow, then revoke the old key instead of rotating it in place.
+
+Changing a user's password does not rotate their automation keys. Rotate or revoke those separately if a key or account is compromised. Key creation/rotation/revocation is recorded in audit history without secrets or hashes; registry pushes identify the key username in the actor field.
 
 ## Management API
 
@@ -96,6 +100,7 @@ These routes require a normal browser session; keys cannot use them to mint more
 
 - `GET /api/keys`: own key metadata, or all keys for an admin.
 - `POST /api/keys`: create an owner-bound key and return the secret once.
+- `POST /api/keys/<uuid>/rotate`: rotate an owned active key, or any active key for an admin. Takes no body and returns the replacement credentials once with `Cache-Control: no-store`. Other users' keys return 404; inactive keys return 409. The key itself cannot authorize this request.
 - `DELETE /api/keys/<uuid>`: revoke an owned key, or any key for an admin.
 
 Creation accepts:
@@ -112,7 +117,7 @@ Choose an actual future expiration when using the API. Browser writes require an
 
 ## Upgrade
 
-The migration job creates the `access_keys` table before web startup. Only SHA-256 hashes of cryptographically random secrets are stored. The signing keys from `init` remain separate from automation credentials and TLS certificates.
+The migration job creates the `access_keys` table and adds its nullable `rotated_at` timestamp before web startup. Existing keys and their credentials remain unchanged by the upgrade. Only SHA-256 hashes of cryptographically random secrets are stored; rotation replaces the hash atomically with its audit event. The signing keys from `init` remain separate from automation credentials and TLS certificates.
 
 Back up the database along with registry data and signing material, protect CI secrets, and never delete data volumes to revoke a key.
 

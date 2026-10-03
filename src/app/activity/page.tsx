@@ -32,6 +32,7 @@ const labels: Record<string, string> = {
   "project.update": "Updated project",
   "key.create": "Created automation key",
   "key.revoke": "Revoked automation key",
+  "key.rotate": "Rotated automation key",
 }
 
 function ActivityView() {

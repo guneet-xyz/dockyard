@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { generateKeyCredentials, hashKeySecret, keyId, keyUsername } from "@/lib/access-keys"
+import {
+  assertKeyRotatable,
+  generateKeyCredentials,
+  hashKeySecret,
+  keyId,
+  keyUsername,
+} from "@/lib/access-keys"
 import { allowedKeyActions } from "@/lib/key-permissions"
 import { registryTokenExpiry } from "@/lib/registry-token"
 import type { KeyGrant } from "@/lib/types"
@@ -91,5 +97,33 @@ describe("key credentials and expiry", () => {
     expect(registryTokenExpiry(null, 1000)).toBe(1300)
     expect(registryTokenExpiry(new Date(1100 * 1000), 1000)).toBe(1100)
     expect(registryTokenExpiry(new Date(2000 * 1000), 1000)).toBe(1300)
+  })
+
+  it("rotates a secret without changing the key identity", () => {
+    const original = generateKeyCredentials()
+    const replacement = generateKeyCredentials(original.id)
+    expect(replacement.id).toBe(original.id)
+    expect(replacement.username).toBe(original.username)
+    expect(replacement.secret).not.toBe(original.secret)
+    expect(replacement.secretHash).not.toBe(original.secretHash)
+    expect(replacement.secretHash).toBe(hashKeySecret(replacement.secret))
+  })
+
+  it("allows only active keys to rotate and preserves the token expiry boundary", () => {
+    const active = { revokedAt: null, expiresAt: null, ownerEnabled: true }
+    expect(() => assertKeyRotatable(active, 1000)).not.toThrow()
+    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(2000) }, 1000)).not.toThrow()
+    expect(() => assertKeyRotatable({ ...active, revokedAt: new Date(500) }, 1000)).toThrow(
+      "Revoked keys",
+    )
+    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(1000) }, 1000)).toThrow(
+      "Expired keys",
+    )
+    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(1500) }, 1000)).toThrow(
+      "Expired keys",
+    )
+    expect(() => assertKeyRotatable({ ...active, ownerEnabled: false }, 1000)).toThrow(
+      "disabled owner",
+    )
   })
 })

@@ -88,7 +88,7 @@ test("admin signs in, creates a private repository, and sees administration", as
   await expect(page.getByText(name).first()).toBeVisible()
 })
 
-test("automation key secret is shown once and the key can be revoked", async ({ page }) => {
+test("automation key can be rotated, downloaded once, and revoked", async ({ page }) => {
   test.skip(
     !process.env.TEST_ADMIN_PASSWORD,
     "Set TEST_ADMIN_PASSWORD to enable key browser checks",
@@ -188,9 +188,61 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   const card = page
     .locator("div.rounded-xl.border.bg-card")
     .filter({ has: page.getByRole("heading", { name: keyName, exact: true }) })
+  await card.getByRole("button", { name: "Rotate", exact: true }).click()
+  await expect(page.getByRole("dialog", { name: "Rotate this key?" })).toContainText(
+    "old secret stops authenticating immediately",
+  )
+  await page.getByRole("button", { name: "Cancel", exact: true }).click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+  await card.getByRole("button", { name: "Rotate", exact: true }).click()
+  // A failed rotation must not show credentials or silently dismiss the confirmation.
+  await page.route(`**/api/keys/${exported.id}/rotate`, (route) =>
+    route.fulfill({ status: 409, json: { error: "Rotation temporarily blocked for test" } }),
+  )
+  await page.getByRole("button", { name: "Rotate key", exact: true }).click()
+  await expect(
+    page.getByText("Rotation temporarily blocked for test", { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole("dialog", { name: "Rotate this key?" })).toBeVisible()
+  await expect(page.getByLabel("Key secret", { exact: true })).toHaveCount(0)
+  await page.unroute(`**/api/keys/${exported.id}/rotate`)
+  await page.getByRole("button", { name: "Rotate key", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "Save your key secret" })).toBeVisible()
+  await expect(page.getByLabel("Key secret", { exact: true })).toHaveAttribute("type", "password")
+  await expect(page.getByLabel("Docker username", { exact: true })).toHaveValue(keyUsername)
+  const replacementSecret = await page.getByLabel("Key secret", { exact: true }).inputValue()
+  expect(replacementSecret !== keySecret).toBe(true)
+  const rotationDownloadPromise = page.waitForEvent("download")
+  await page.getByRole("button", { name: "Download JSON", exact: true }).click()
+  const rotationDownload = await rotationDownloadPromise
+  const rotationFile = test.info().outputPath("rotated-key.json")
+  await rotationDownload.saveAs(rotationFile)
+  const replacement = JSON.parse(await readFile(rotationFile, "utf8"))
+  expect(replacement.secret === replacementSecret).toBe(true)
+  const { secret: omittedOriginal, ...originalMetadata } = exported
+  const { secret: omittedReplacement, ...replacementMetadata } = replacement
+  expect(Boolean(omittedOriginal && omittedReplacement)).toBe(true)
+  expect(replacementMetadata).toEqual(originalMetadata)
+  await page.setViewportSize({ width: 320, height: 844 })
+  await expect(secretDialog).toBeVisible()
+  expect(
+    await secretDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+  ).toBe(true)
+  await page.getByRole("button", { name: "I saved the secret", exact: true }).click()
+  await expect(card.getByText(/^Last rotated /)).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.reload()
+  await expect(page.getByLabel("Key secret", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Download JSON", exact: true })).toHaveCount(0)
   await card.getByRole("button", { name: "Revoke", exact: true }).click()
   await page.getByRole("button", { name: "Revoke key", exact: true }).click()
   await expect(card.getByText("Revoked", { exact: true })).toBeVisible()
+  await expect(card.getByRole("button", { name: "Rotate", exact: true })).toHaveCount(0)
+  await page.goto("/activity")
+  await expect(page.getByText("Rotated automation key", { exact: true }).first()).toBeVisible()
 })
 
 test("automation resource selects handle fetch failures and empty collections", async ({

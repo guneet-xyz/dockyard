@@ -61,6 +61,7 @@ export const accessKeys = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
   },
   (table) => [index("access_keys_owner_idx").on(table.ownerId)],
 )

@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { db } from "./db"
 import { accessKeys, users } from "./db/schema"
 import { consumeCredentialAttempt, resetCredentialAttempts } from "./auth"
+import { HttpError } from "./http"
 import type { KeyGrant, SessionUser } from "./types"
 
 export function keyUsername(id: string) {
@@ -17,10 +18,20 @@ export function keyId(username: string) {
 export function hashKeySecret(secret: string) {
   return createHash("sha256").update(secret).digest("hex")
 }
-export function generateKeyCredentials() {
-  const id = randomUUID()
+export function generateKeyCredentials(id: string = randomUUID()) {
   const secret = `dk_${randomBytes(32).toString("base64url")}`
   return { id, username: keyUsername(id), secret, secretHash: hashKeySecret(secret) }
+}
+
+export function assertKeyRotatable(
+  key: { revokedAt: Date | null; expiresAt: Date | null; ownerEnabled: boolean },
+  now = Date.now(),
+) {
+  if (key.revokedAt) throw new HttpError(409, "Revoked keys cannot be rotated. Create a new key.")
+  if (key.expiresAt && Math.floor(key.expiresAt.getTime() / 1000) <= Math.floor(now / 1000))
+    throw new HttpError(409, "Expired keys cannot be rotated. Create a new key.")
+  if (!key.ownerEnabled)
+    throw new HttpError(409, "Keys belonging to a disabled owner cannot be rotated.")
 }
 
 export type AuthenticatedKey = {
@@ -66,10 +77,17 @@ export async function authenticateAccessKey(
   )
     return null
   await resetCredentialAttempts(keyUsername(id))
+  // A concurrent rotation must invalidate authentication that read the previous hash.
   const updated = await db()
     .update(accessKeys)
     .set({ lastUsedAt: new Date() })
-    .where(and(eq(accessKeys.id, id), isNull(accessKeys.revokedAt)))
+    .where(
+      and(
+        eq(accessKeys.id, id),
+        isNull(accessKeys.revokedAt),
+        eq(accessKeys.secretHash, row.key.secretHash),
+      ),
+    )
     .returning({ id: accessKeys.id })
   if (!updated.length) return null
   return {

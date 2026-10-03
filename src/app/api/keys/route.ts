@@ -39,6 +39,7 @@ export async function GET() {
         expiresAt: accessKeys.expiresAt,
         revokedAt: accessKeys.revokedAt,
         lastUsedAt: accessKeys.lastUsedAt,
+        rotatedAt: accessKeys.rotatedAt,
       })
       .from(accessKeys)
       .innerJoin(users, eq(users.id, accessKeys.ownerId))

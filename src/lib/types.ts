@@ -23,6 +23,7 @@ export type AccessKeyInfo = {
   expiresAt: string | null
   revokedAt: string | null
   lastUsedAt: string | null
+  rotatedAt: string | null
 }
 export type Repository = {
   name: string
