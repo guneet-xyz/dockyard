@@ -14,6 +14,7 @@ import {
   Command,
   ExternalLink,
   FolderOpen,
+  KeyRound,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -42,6 +43,7 @@ const navigation = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Projects", href: "/projects", icon: FolderOpen },
   { label: "Images", href: "/repositories", icon: Box },
+  { label: "Automation keys", href: "/keys", icon: KeyRound },
   { label: "Quick start", href: "/guide", icon: Terminal },
 ]
 
@@ -166,11 +168,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ? "Images"
         : pathname.startsWith("/projects")
           ? "Projects"
-          : pathname === "/users"
-            ? "Access control"
-            : pathname === "/activity"
-              ? "Activity log"
-              : "Quick start"
+          : pathname === "/keys"
+            ? "Automation keys"
+            : pathname === "/users"
+              ? "Access control"
+              : pathname === "/activity"
+                ? "Activity log"
+                : "Quick start"
   if (pathname === "/login") return <>{children}</>
   async function logout() {
     try {

@@ -58,6 +58,18 @@ async function token(scope: string, name?: string, pass = testPassword) {
   const data = await check(response, 200, "Issue registry token")
   return data.token as string
 }
+
+async function rejectedKey(username: string, secret: string, label: string) {
+  return check(
+    await fetch(`${app}/api/registry/token?service=dockyard-registry`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${username}:${secret}`).toString("base64")}`,
+      },
+    }),
+    401,
+    label,
+  )
+}
 async function registryCall(
   path: string,
   bearer: string,
@@ -254,6 +266,220 @@ async function main() {
     201,
     "Reserve image under private project",
   )
+  await check(await browser("/api/keys"), 401, "Guest key management blocked")
+  await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      { name: "viewer-write", grants: [{ type: "image", target: repo, actions: ["push"] }] },
+      viewerCookie,
+    ),
+    403,
+    "Viewer cannot mint write keys",
+  )
+  await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: "unknown-project",
+        grants: [{ type: "project", target: `missing-${suffix}`, actions: ["pull"] }],
+      },
+      maintainerCookie,
+    ),
+    404,
+    "Unknown project key grant rejected",
+  )
+  await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: "already-expired",
+        grants: [{ type: "image", target: repo, actions: ["pull"] }],
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
+      },
+      maintainerCookie,
+    ),
+    400,
+    "Past key expiry rejected",
+  )
+  const imageKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `image-build-${suffix}`,
+        grants: [{ type: "image", target: repo, actions: ["pull", "push"] }],
+      },
+      maintainerCookie,
+    ),
+    201,
+    "Create exact-image build key",
+  )
+  const viewerKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `viewer-deploy-${suffix}`,
+        grants: [{ type: "image", target: privateRepo, actions: ["pull"] }],
+      },
+      viewerCookie,
+    ),
+    201,
+    "Viewer creates a private-image pull key",
+  )
+  const projectKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `project-release-${suffix}`,
+        grants: [{ type: "project", target: `smoke-${suffix}`, actions: ["pull", "push"] }],
+      },
+      maintainerCookie,
+    ),
+    201,
+    "Create project release key",
+  )
+  const adminKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `admin-scoped-${suffix}`,
+        grants: [{ type: "image", target: repo, actions: ["pull"] }],
+      },
+      adminCookie,
+    ),
+    201,
+    "Admin key remains resource scoped",
+  )
+  const viewerKeys = await check(
+    await browser("/api/keys", "GET", undefined, viewerCookie),
+    200,
+    "Viewer lists own key metadata",
+  )
+  assert.ok(viewerKeys.keys.some((key: { id: string }) => key.id === viewerKey.id))
+  assert.ok(!viewerKeys.keys.some((key: { id: string }) => key.id === imageKey.id))
+  assert.ok(
+    viewerKeys.keys.every(
+      (key: Record<string, unknown>) => !("secret" in key) && !("secretHash" in key),
+    ),
+  )
+  assertions += 3
+  await check(
+    await browser(`/api/keys/${imageKey.id}`, "DELETE", {}, viewerCookie),
+    404,
+    "Other user's key cannot be revoked",
+  )
+  await check(
+    await fetch(`${app}/api/keys`, { headers: { Authorization: `Bearer ${imageKey.secret}` } }),
+    401,
+    "Registry keys cannot mint or list keys through web APIs",
+  )
+  await check(
+    await browser("/api/auth/login", "POST", {
+      username: imageKey.username,
+      password: imageKey.secret,
+    }),
+    401,
+    "Registry key cannot create a browser session",
+  )
+  const imageKeyToken = await token(
+    `repository:${repo}:pull,push,delete`,
+    imageKey.username,
+    imageKey.secret,
+  )
+  assert.deepEqual(
+    JSON.parse(Buffer.from(imageKeyToken.split(".")[1], "base64url").toString()).access[0].actions,
+    ["pull", "push"],
+  )
+  assertions++
+  const outsideImage = await token(
+    `repository:${privateRepo}:pull,push`,
+    imageKey.username,
+    imageKey.secret,
+  )
+  assert.deepEqual(
+    JSON.parse(Buffer.from(outsideImage.split(".")[1], "base64url").toString()).access[0].actions,
+    [],
+  )
+  assertions++
+  await check(
+    await registryCall(`/v2/${privateRepo}/blobs/uploads/`, outsideImage, "POST"),
+    401,
+    "Image key cannot push a sibling image",
+  )
+  const outsidePublic = await token(
+    `repository:mixed-project/api:pull`,
+    imageKey.username,
+    imageKey.secret,
+  )
+  assert.deepEqual(
+    JSON.parse(Buffer.from(outsidePublic.split(".")[1], "base64url").toString()).access[0].actions,
+    [],
+  )
+  assertions++
+  const futureToken = await token(
+    `repository:smoke-${suffix}/future:pull,push`,
+    projectKey.username,
+    projectKey.secret,
+  )
+  await check(
+    await registryCall(`/v2/smoke-${suffix}/future/blobs/uploads/`, futureToken, "POST"),
+    202,
+    "Project key can push a future image",
+  )
+  const otherProject = await token(
+    `repository:${protectedProject}/other:push`,
+    projectKey.username,
+    projectKey.secret,
+  )
+  await check(
+    await registryCall(`/v2/${protectedProject}/other/blobs/uploads/`, otherProject, "POST"),
+    401,
+    "Project key cannot cross namespaces",
+  )
+  const keyCatalog = await token("registry:catalog:*", adminKey.username, adminKey.secret)
+  await check(
+    await registryCall("/v2/_catalog", keyCatalog),
+    401,
+    "Admin-owned keys cannot obtain raw catalog privileges",
+  )
+  await rejectedKey(imageKey.username, `${imageKey.secret}wrong`, "Wrong key secret rejected")
+  const expiringKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `short-lived-${suffix}`,
+        grants: [{ type: "image", target: repo, actions: ["pull"] }],
+        expiresAt: new Date(Date.now() + 4000).toISOString(),
+      },
+      maintainerCookie,
+    ),
+    201,
+    "Create expiring key",
+  )
+  const expiringToken = await token(
+    `repository:${repo}:pull`,
+    expiringKey.username,
+    expiringKey.secret,
+  )
+  const expiryClaims = JSON.parse(Buffer.from(expiringToken.split(".")[1], "base64url").toString())
+  assert.ok(expiryClaims.exp <= Math.floor(new Date(expiringKey.expiresAt).getTime() / 1000))
+  assert.ok(expiryClaims.exp - expiryClaims.iat < 300)
+  assertions += 2
+  await new Promise((resolve) => setTimeout(resolve, 4500))
+  await rejectedKey(expiringKey.username, expiringKey.secret, "Expired key authentication rejected")
+  await check(
+    await browser(`/api/keys/${adminKey.id}`, "DELETE", {}, adminCookie),
+    200,
+    "Revoke scoped admin key",
+  )
+  await rejectedKey(adminKey.username, adminKey.secret, "Revoked key authentication rejected")
   await check(
     await browser(
       "/api/repositories",
@@ -398,6 +624,23 @@ async function main() {
   )
   const pull = await registryCall(`/v2/${repo}/manifests/latest`, guestToken)
   await check(pull, 200, "Guest pulls actual manifest with signed token")
+  await check(
+    await registryCall(`/v2/${repo}/manifests/latest`, imageKeyToken),
+    200,
+    "Image key pulls its authorized image",
+  )
+  await uploadBlob(repo, imageKeyToken, config)
+  await check(
+    await registryCall(
+      `/v2/${repo}/manifests/key-push`,
+      imageKeyToken,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "Image key performs a real manifest push",
+  )
 
   // Exercise streaming request bodies, PATCH/PUT continuation, HEAD, and range responses.
   const bytes = randomBytes(8 * 1024 * 1024)
@@ -479,6 +722,21 @@ async function main() {
     200,
     "Viewer pulls a private image through ingress",
   )
+  const viewerKeyToken = await token(
+    `repository:${privateRepo}:pull,push`,
+    viewerKey.username,
+    viewerKey.secret,
+  )
+  await check(
+    await registryCall(`/v2/${privateRepo}/manifests/latest`, viewerKeyToken),
+    200,
+    "Viewer-owned key pulls the exact private image",
+  )
+  await check(
+    await registryCall(`/v2/${privateRepo}/blobs/uploads/`, viewerKeyToken, "POST"),
+    401,
+    "Viewer key cannot push",
+  )
   const protectedPush = await token(`repository:${protectedProject}/web:pull,push`, maintainer)
   await uploadBlob(`${protectedProject}/web`, protectedPush, config)
   await check(
@@ -511,6 +769,11 @@ async function main() {
   )
   assert.equal(detail.images[0].platforms[0], "linux/arm64")
   assertions++
+  await check(
+    await registryCall(`/v2/${repo}/manifests/${detail.images[0].digest}`, imageKeyToken, "DELETE"),
+    401,
+    "Push permission does not implicitly allow deletion",
+  )
   await check(
     await browser(
       `/api/repositories/${repo}`,
@@ -547,10 +810,26 @@ async function main() {
     "Anonymous raw catalog blocked",
   )
   await check(
+    await browser(`/api/users/${created.id}`, "PATCH", { role: "viewer" }, adminCookie),
+    200,
+    "Demote key owner",
+  )
+  const demoted = await token(
+    `repository:${repo}:pull,push,delete`,
+    imageKey.username,
+    imageKey.secret,
+  )
+  assert.deepEqual(
+    JSON.parse(Buffer.from(demoted.split(".")[1], "base64url").toString()).access[0].actions,
+    ["pull"],
+  )
+  assertions++
+  await check(
     await browser(`/api/users/${created.id}`, "PATCH", { enabled: false }, adminCookie),
     200,
     "Disable maintainer",
   )
+  await rejectedKey(imageKey.username, imageKey.secret, "Disabled owner blocks existing keys")
   await check(
     await browser(
       "/api/repositories",

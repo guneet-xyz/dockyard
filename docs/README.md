@@ -14,6 +14,8 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
+Read [Automation keys](automation-keys.md) for project/image-scoped CI credentials, Docker login, expiry, revocation, and workflow examples.
+
 Read [Projects and images](projects.md) for the `project/image` naming policy, project visibility, and legacy repository compatibility.
 
 Read [URL, TLS, and port configuration](configuration.md) for the logic behind `APP_URL`, `INGRESS_PUBLIC_URL`, upstream URLs, network bindings, and redirect-loop diagnosis.

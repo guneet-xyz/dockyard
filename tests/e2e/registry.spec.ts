@@ -86,3 +86,44 @@ test("admin signs in, creates a private repository, and sees administration", as
   await expect(page.getByRole("heading", { name: "Activity log", exact: true })).toBeVisible()
   await expect(page.getByText(name).first()).toBeVisible()
 })
+
+test("automation key secret is shown once and the key can be revoked", async ({ page }) => {
+  test.skip(
+    !process.env.TEST_ADMIN_PASSWORD,
+    "Set TEST_ADMIN_PASSWORD to enable key browser checks",
+  )
+  await page.goto("/login")
+  await page
+    .getByLabel("Username", { exact: true })
+    .fill(process.env.TEST_ADMIN_USERNAME ?? "admin")
+  await page.getByLabel("Password", { exact: true }).fill(process.env.TEST_ADMIN_PASSWORD!)
+  await page.getByRole("button", { name: "Sign in", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+  await page.getByRole("button", { name: "New project" }).click()
+  const suffix = Date.now().toString(36)
+  const project = `key-browser-${suffix}`
+  const keyName = `browser-build-${suffix}`
+  await page.getByLabel("Project name", { exact: true }).fill(project)
+  await page.getByRole("button", { name: "Create project", exact: true }).click()
+  await expect(page.getByRole("heading", { name: project, exact: true })).toBeVisible()
+  await page.getByRole("link", { name: "Automation keys", exact: true }).click()
+  await expect(page.getByRole("heading", { name: "Automation keys", exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Create key", exact: true }).click()
+  await page.getByLabel("Key name", { exact: true }).fill(keyName)
+  await page.getByRole("textbox", { name: "Grant 1 target", exact: true }).fill(`${project}/init`)
+  await page.getByRole("checkbox", { name: "Push", exact: true }).check()
+  await page.getByRole("button", { name: "Create key", exact: true }).last().click()
+  await expect(page.getByRole("heading", { name: "Save your key secret" })).toBeVisible()
+  await expect(page.getByLabel("Key secret", { exact: true })).toHaveAttribute("type", "password")
+  await expect(page.getByLabel("Docker username", { exact: true })).toHaveValue(/^_key_/)
+  await page.getByRole("button", { name: "I saved the secret", exact: true }).click()
+  await page.reload()
+  await expect(page.getByRole("heading", { name: keyName, exact: true })).toBeVisible()
+  await expect(page.getByLabel("Key secret", { exact: true })).toHaveCount(0)
+  const card = page
+    .locator("div.rounded-xl.border.bg-card")
+    .filter({ has: page.getByRole("heading", { name: keyName, exact: true }) })
+  await card.getByRole("button", { name: "Revoke", exact: true }).click()
+  await page.getByRole("button", { name: "Revoke key", exact: true }).click()
+  await expect(card.getByText("Revoked", { exact: true })).toBeVisible()
+})

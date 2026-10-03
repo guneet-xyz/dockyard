@@ -179,6 +179,8 @@ Disabling an account, changing its role, or resetting its password revokes its w
 
 ### Authentication and security
 
+For CI/CD, use [automation keys](automation-keys.md) rather than an account password. Keys have project/image operation grants capped by their active owner's current role and never grant browser/admin access.
+
 - Passwords are hashed with bcrypt (cost 12); no password hashes are sent to the browser.
 - Session cookies are HttpOnly, SameSite=Lax, and Secure when `APP_URL` uses HTTPS. Sessions last 7 days; their hashes are stored in PostgreSQL.
 - Mutating browser endpoints require an exact `Origin` match with `APP_URL`.

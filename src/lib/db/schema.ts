@@ -9,6 +9,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core"
+import type { KeyGrant } from "../types"
 
 export const roleEnum = pgEnum("role", ["admin", "maintainer", "viewer"])
 export const visibilityEnum = pgEnum("visibility", ["public", "private"])
@@ -45,6 +46,24 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })
+
+export const accessKeys = pgTable(
+  "access_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    secretHash: text("secret_hash").notNull(),
+    grants: jsonb("grants").$type<KeyGrant[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (table) => [index("access_keys_owner_idx").on(table.ownerId)],
+)
 
 // Distribution stores images as repository names; project membership is their first path segment.
 export const repositories = pgTable("repositories", {

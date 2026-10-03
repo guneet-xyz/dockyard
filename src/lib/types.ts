@@ -8,6 +8,22 @@ export type SessionUser = {
 }
 export type UserInfo = SessionUser & { createdAt: string }
 export type Visibility = "public" | "private"
+export type KeyAction = "pull" | "push" | "delete"
+export type KeyGrant = { type: "project" | "image"; target: string; actions: KeyAction[] }
+export type AccessKeyInfo = {
+  id: string
+  username: string
+  name: string
+  ownerId: string
+  ownerUsername: string
+  ownerEnabled: boolean
+  status: "Active" | "Expired" | "Revoked" | "Owner disabled"
+  grants: KeyGrant[]
+  createdAt: string
+  expiresAt: string | null
+  revokedAt: string | null
+  lastUsedAt: string | null
+}
 export type Repository = {
   name: string
   projectName: string | null

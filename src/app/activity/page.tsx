@@ -28,6 +28,10 @@ const labels: Record<string, string> = {
   "repository.update": "Updated repository",
   "image.delete": "Deleted image",
   "image.push": "Pushed image",
+  "project.create": "Created project",
+  "project.update": "Updated project",
+  "key.create": "Created automation key",
+  "key.revoke": "Revoked automation key",
 }
 
 function ActivityView() {

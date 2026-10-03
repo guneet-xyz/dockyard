@@ -26,7 +26,18 @@ function signingMaterial() {
   })())
 }
 
-export async function signRegistryToken(subject: string, access: RegistryAccess[]) {
+export function registryTokenExpiry(
+  expiresAt: Date | null = null,
+  now = Math.floor(Date.now() / 1000),
+) {
+  return expiresAt ? Math.min(now + 300, Math.floor(expiresAt.getTime() / 1000)) : now + 300
+}
+
+export async function signRegistryToken(
+  subject: string,
+  access: RegistryAccess[],
+  expiresAt: Date | null = null,
+) {
   const { key, certificate } = await signingMaterial()
   return new SignJWT({ access })
     .setProtectedHeader({ alg: "RS256", typ: "JWT", x5c: [certificate] })
@@ -35,7 +46,7 @@ export async function signRegistryToken(subject: string, access: RegistryAccess[
     .setSubject(subject)
     .setIssuedAt()
     .setNotBefore(Math.floor(Date.now() / 1000) - 5)
-    .setExpirationTime("5m")
+    .setExpirationTime(registryTokenExpiry(expiresAt))
     .setJti(randomUUID())
     .sign(key)
 }

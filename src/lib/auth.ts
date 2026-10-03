@@ -45,11 +45,7 @@ export async function requireUser(admin = false) {
   return user
 }
 
-export async function checkCredentials(
-  username: string,
-  password: string,
-): Promise<SessionUser | null> {
-  if (Buffer.byteLength(password, "utf8") > 72 || !username || username.length > 64) return null
+export async function consumeCredentialAttempt(username: string) {
   const key = hash(`login:${username.toLowerCase()}`)
   const now = new Date()
   // Atomic upsert avoids parallel requests bypassing the limit.
@@ -65,6 +61,20 @@ export async function checkCredentials(
     })
     .returning()
   if (attempt.count > 20) throw new HttpError(429, "Too many attempts. Try again in 15 minutes.")
+}
+
+export async function resetCredentialAttempts(username: string) {
+  await db()
+    .delete(loginAttempts)
+    .where(eq(loginAttempts.key, hash(`login:${username.toLowerCase()}`)))
+}
+
+export async function checkCredentials(
+  username: string,
+  password: string,
+): Promise<SessionUser | null> {
+  if (Buffer.byteLength(password, "utf8") > 72 || !username || username.length > 64) return null
+  await consumeCredentialAttempt(username)
   const [user] = await db()
     .select()
     .from(users)
@@ -72,7 +82,7 @@ export async function checkCredentials(
     .limit(1)
   const valid = await bcrypt.compare(password, user?.passwordHash ?? dummyHash)
   if (!user || !valid || !user.enabled) return null
-  await db().delete(loginAttempts).where(eq(loginAttempts.key, key))
+  await resetCredentialAttempts(username)
   return {
     id: user.id,
     username: user.username,

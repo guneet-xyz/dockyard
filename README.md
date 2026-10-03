@@ -8,6 +8,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 - Projects with images under exactly `project/image`, such as `dockyard/init` and `dockyard/web`.
 - Public guest pulls and authenticated access to private repositories.
 - Viewer, maintainer, and admin roles; user management and audit history.
+- Scoped automation keys for CI/CD, with project/image grants, expiry, and revocation.
 - One public endpoint for the UI and registry API, with streaming image transfers.
 - Separate `init`, `migrate`, `web`, and environment-configured `ingress` images.
 - Docker Compose deployment, persistent data, pnpm, and Prettier with `semi: false`.
@@ -58,6 +59,7 @@ The detailed documentation lives in [`docs/`](docs/README.md):
 - [Own proxy without ingress](docs/deployment/custom-proxy.md): disabling ingress, backend access, Caddy/Nginx routing, and auth checks.
 - [URL and TLS configuration](docs/configuration.md): what each URL/port variable controls and why incorrect TLS ownership causes redirect loops.
 - [Projects and images](docs/projects.md): namespaces, visibility, publishing, and compatibility with existing paths.
+- [Automation keys](docs/automation-keys.md): least-privilege registry credentials for CI/CD and unattended deployments.
 - [Reference](docs/reference.md): ingress variables, authentication/RBAC, persistence, maintenance, local development, tests, and architecture.
 
 **Production:** use HTTPS before sending credentials over an untrusted network. **Persistence:** never run `docker compose down -v` unless you intend to delete the database, registry images, and signing keys.
