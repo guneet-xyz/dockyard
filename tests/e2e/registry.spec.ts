@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { readFile } from "node:fs/promises"
 
 test("guest can browse without login and has no write controls", async ({ page }) => {
   const errors: string[] = []
@@ -132,6 +133,26 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   await expect(page.getByRole("heading", { name: "Save your key secret" })).toBeVisible()
   await expect(page.getByLabel("Key secret", { exact: true })).toHaveAttribute("type", "password")
   await expect(page.getByLabel("Docker username", { exact: true })).toHaveValue(/^_key_/)
+  const keyUsername = await page.getByLabel("Docker username", { exact: true }).inputValue()
+  const keySecret = await page.getByLabel("Key secret", { exact: true }).inputValue()
+  const downloading = page.waitForEvent("download")
+  await page.getByRole("button", { name: "Download JSON", exact: true }).click()
+  const download = await downloading
+  expect(download.suggestedFilename()).toMatch(/^dockyard-key-[0-9a-f-]+\.json$/)
+  const file = test.info().outputPath("downloaded-key.json")
+  await download.saveAs(file)
+  const exported = JSON.parse(await readFile(file, "utf8"))
+  expect(exported.version).toBe(1)
+  expect(exported.name).toBe(keyName)
+  expect(exported.username).toBe(keyUsername)
+  // Assert equality without including a credential in assertion failure output.
+  expect(exported.secret === keySecret).toBe(true)
+  expect(exported.grants).toEqual([
+    { type: "project", target: project, actions: ["pull"] },
+    { type: "image", target: `${project}/init`, actions: ["pull", "push"] },
+  ])
+  expect(exported.expiresAt).toBeTruthy()
+  expect(exported).not.toHaveProperty("secretHash")
   const secretDialog = page.getByRole("dialog", { name: "Save your key secret" })
   await page.getByRole("button", { name: "Show key secret", exact: true }).click()
   for (const width of [1440, 390, 320]) {
@@ -163,6 +184,7 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   await page.reload()
   await expect(page.getByRole("heading", { name: keyName, exact: true })).toBeVisible()
   await expect(page.getByLabel("Key secret", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Download JSON", exact: true })).toHaveCount(0)
   const card = page
     .locator("div.rounded-xl.border.bg-card")
     .filter({ has: page.getByRole("heading", { name: keyName, exact: true }) })

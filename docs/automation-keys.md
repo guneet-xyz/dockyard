@@ -10,7 +10,9 @@ Keys authenticate to the existing registry token endpoint. They **do not** creat
 2. Give the key a descriptive name, such as `GitHub Actions — release`.
 3. Choose expiration (90 days is the default recommendation).
 4. Add one or more resource grants. Choose **Project** or **Image**, select the resource from its dropdown, and select operations. Changing the grant type clears its previous selection.
-5. Save the generated Docker username and secret in your CI secret manager. The secret is shown **once** and cannot be retrieved from the list later.
+5. Save the generated Docker username and secret in your CI secret manager, or use **Download JSON** in the save-key dialog. The secret is shown **once** and cannot be retrieved or downloaded from the list later.
+
+The JSON download is generated locally in your browser and contains `version`, key `id`/`name`, `registryHost`, `username`, `secret`, `grants`, and `expiresAt`. It includes the **unencrypted secret**: protect it like a password, keep it out of Git, and import it into a secret manager. It is not a Docker `config.json`. Closing the dialog clears the one-time credentials from UI state; there is no backend endpoint to recover or download them afterward.
 
 | Grant type | Target example  | Applies to                                                                                                                 |
 | ---------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |

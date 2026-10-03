@@ -2,12 +2,13 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Eye, EyeOff, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { Download, Eye, EyeOff, KeyRound, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useSession } from "@/hooks/use-session"
 import { useProjects } from "@/hooks/use-projects"
 import { useRepositories } from "@/hooks/use-repositories"
 import { api } from "@/lib/api-client"
+import { keyExportFilename, serializeKeyCredentials, type KeyCredentials } from "@/lib/key-export"
 import type { AccessKeyInfo, KeyAction, KeyGrant } from "@/lib/types"
 import { timeAgo } from "@/lib/utils"
 import { CommandBlock, CopyButton, ErrorState, TableSkeleton } from "@/components/shared"
@@ -39,13 +40,6 @@ type KeysResponse = {
   canWrite: boolean
   isAdmin: boolean
 }
-type Credentials = {
-  id: string
-  username: string
-  secret: string
-  name: string
-  registryHost: string
-}
 
 function CreateKey({ canWrite }: { canWrite: boolean }) {
   const [open, setOpen] = useState(false)
@@ -55,7 +49,7 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
   const [grants, setGrants] = useState<KeyGrant[]>([
     { type: "image", target: "", actions: ["pull"] },
   ])
-  const [credentials, setCredentials] = useState<Credentials | null>(null)
+  const [credentials, setCredentials] = useState<KeyCredentials | null>(null)
   const [showSecret, setShowSecret] = useState(false)
   const client = useQueryClient()
   const projects = useProjects(open)
@@ -84,7 +78,7 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
     setPending(true)
     try {
       // Never store the one-time secret in query/mutation caches or local storage.
-      const created = await api<Credentials>("/api/keys", {
+      const created = await api<KeyCredentials>("/api/keys", {
         method: "POST",
         body: JSON.stringify({
           name,
@@ -106,6 +100,24 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
       toast.error((error as Error).message)
     } finally {
       setPending(false)
+    }
+  }
+  function downloadCredentials() {
+    if (!credentials) return
+    const blob = new Blob([serializeKeyCredentials(credentials)], {
+      type: "application/json;charset=utf-8",
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    try {
+      anchor.href = url
+      anchor.download = keyExportFilename(credentials.id)
+      document.body.appendChild(anchor)
+      anchor.click()
+    } finally {
+      anchor.remove()
+      // Release the credential-bearing blob once the browser has started the download.
+      setTimeout(() => URL.revokeObjectURL(url), 0)
     }
   }
   return (
@@ -386,8 +398,20 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
                 Set DOCKYARD_KEY to the secret in your CI environment. Do not put the secret
                 directly in a command or commit it to your repository.
               </p>
-              <DialogFooter>
+              <p className="text-xs text-amber-300">
+                Downloaded JSON includes the unencrypted key secret. Keep it private and out of Git.
+              </p>
+              <DialogFooter className="flex-col sm:flex-row">
                 <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={downloadCredentials}
+                >
+                  <Download />
+                  Download JSON
+                </Button>
+                <Button
+                  className="w-full sm:w-auto"
                   onClick={() => {
                     setCredentials(null)
                     setShowSecret(false)
