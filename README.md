@@ -55,6 +55,7 @@ The detailed documentation lives in [`docs/`](docs/README.md):
 - [Build setup](docs/deployment/build.md): requirements, image builds, startup jobs, prebuilt images, upgrades, and verification.
 - [Two-proxy setup](docs/deployment/two-proxies.md): HTTPS at an external proxy, HTTP behind it, and host/container networking.
 - [Own proxy without ingress](docs/deployment/custom-proxy.md): disabling ingress, backend access, Caddy/Nginx routing, and auth checks.
+- [URL and TLS configuration](docs/configuration.md): what each URL/port variable controls and why incorrect TLS ownership causes redirect loops.
 - [Reference](docs/reference.md): ingress variables, authentication/RBAC, persistence, maintenance, local development, tests, and architecture.
 
 **Production:** use HTTPS before sending credentials over an untrusted network. **Persistence:** never run `docker compose down -v` unless you intend to delete the database, registry images, and signing keys.

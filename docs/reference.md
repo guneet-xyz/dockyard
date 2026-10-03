@@ -75,7 +75,7 @@ http://localhost:3000
 
 Ingress forwards client authorization, registry challenges, digests, upload locations, and range responses unchanged. Uploads and downloads stream directly to/from Distribution, not through Next.js. It never inserts the web app's internal service token. Next.js decides permissions when issuing short-lived tokens; Distribution verifies and enforces them on every registry operation. A web session cookie alone does not authorize registry access.
 
-`APP_URL` is the single public origin and determines Docker commands shown in the UI and the registry's token realm. Change `INGRESS_PORT` and `APP_URL` together for a different port. `INGRESS_BIND_ADDRESS` defaults to `0.0.0.0`; set it to `127.0.0.1` for localhost-only access. The registry returns relative upload URLs to keep resumable uploads on this same origin.
+`APP_URL` is the single public origin and determines Docker commands shown in the UI and the registry's token realm. For direct client access, change `INGRESS_PORT` and `APP_URL` together for a different port; behind an edge proxy, changing a private backend port need not change the external origin. `INGRESS_BIND_ADDRESS` defaults to `0.0.0.0`; set it to `127.0.0.1` for localhost-only access. The registry returns relative upload URLs to keep resumable uploads on this same origin. See [URL, TLS, and port configuration](configuration.md) for the distinction between the public origin, ingress mode, upstream targets, and port mappings.
 
 ### Environment-configured ingress image
 
@@ -89,7 +89,7 @@ Ingress forwards client authorization, registry challenges, digests, upload loca
 
 Upstream URLs support HTTP/HTTPS, custom ports, and bracketed IPv6 addresses. An optional trailing root slash is normalized. Credentials, non-root paths, query strings, fragments, invalid ports, and configuration syntax are rejected before Caddy starts. HTTPS upstream certificates are verified normally; client authorization is never replaced with an upstream credential.
 
-Inside the image, public HTTP listens on port 80 and HTTPS on port 443. An HTTPS public URL can include an external port, such as `https://dockyard.example.com:8443`; map that host port to container port 443. HTTP redirects use the complete public URL, including its external port. The public origin must also match the web app's `APP_URL` and registry token realm.
+Inside the image, HTTP listens on port 80 and HTTPS on port 443. In HTTP mode, the hostname/port in `INGRESS_PUBLIC_URL` does not configure the listener or an upstream destination. For ingress-owned HTTPS, its full public URL must match the web app's `APP_URL` and registry token realm; a custom external port, such as `https://dockyard.example.com:8443`, must be mapped to container port 443. HTTP redirects use that complete HTTPS URL, including its external port. Behind a separate TLS edge, ingress instead uses an HTTP URL while `APP_URL` remains the public HTTPS origin.
 
 To use the image independently on a Docker network:
 

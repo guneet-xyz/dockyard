@@ -34,6 +34,8 @@ The two URL values intentionally differ:
 - `APP_URL` is the public HTTPS origin. Web uses it for origin checks, secure cookies, Docker commands, and the registry's token realm.
 - `INGRESS_PUBLIC_URL` selects **HTTP** for the internal gateway. The current Compose file defaults this independently to HTTP, even when `APP_URL` is HTTPS. Older versions inherited `APP_URL`, so explicitly setting it remains important when upgrading those deployments.
 
+In HTTP mode, `localhost:3000` in the ingress URL does not tell Caddy to connect to localhost or listen on container port 3000. Ingress listens on container port 80; the Compose port mapping publishes it on host port 3000. The outer proxy's actual upstream must match that published address, or `ingress:80` on a shared container network. See [URL, TLS, and port configuration](../configuration.md) for the full variable logic and redirect-loop explanation.
+
 The loopback binding prevents outside clients from bypassing your edge proxy. Keep any administrative restrictions and IP-level rate limits at the edge. The supplied ingress does not trust arbitrary forwarded headers as an authentication source; its HTTP backend hop does not determine the app's configured public origin.
 
 ## 2. Start Dockyard

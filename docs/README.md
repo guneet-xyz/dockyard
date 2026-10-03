@@ -14,6 +14,8 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
+Read [URL, TLS, and port configuration](configuration.md) for the logic behind `APP_URL`, `INGRESS_PUBLIC_URL`, upstream URLs, network bindings, and redirect-loop diagnosis.
+
 See [the reference guide](reference.md) for:
 
 - [Compose modes](reference.md#compose-modes) and [startup jobs](reference.md#images-and-startup-jobs).
