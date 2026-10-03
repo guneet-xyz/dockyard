@@ -97,7 +97,11 @@ describe("release and publishing workflow contracts", () => {
     const metadata = publisher.steps!.find((step) => step.id === "meta")!
     expect(metadata.with?.images).toBe("cr.guneet.dev/dockyard/${{ matrix.target }}")
     expect(metadata.with?.flavor).toBe("latest=false")
-    expect(metadata.with?.tags).toContain("type=sha,format=long")
+    expect(metadata.with?.context).toBe("workflow")
+    expect(metadata.with?.tags).toContain("type=raw,value=sha-${{ needs.prepare.outputs.sha }}")
+    expect(metadata.with?.labels).toContain(
+      "org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}",
+    )
     expect(metadata.with?.tags).toContain(
       "type=raw,value=edge,enable=${{ needs.prepare.outputs.edge == 'true' }}",
     )

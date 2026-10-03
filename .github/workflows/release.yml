@@ -159,11 +159,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          context: git
+          # Release/recovery checkouts intentionally use a detached exact SHA.
+          # Keep workflow context and supply source-derived metadata explicitly.
+          context: workflow
           images: cr.guneet.dev/dockyard/${{ matrix.target }}
           flavor: latest=false
           tags: |
-            type=sha,format=long
+            type=raw,value=sha-${{ needs.prepare.outputs.sha }},priority=100
             type=raw,value=edge,enable=${{ needs.prepare.outputs.edge == 'true' }}
             type=semver,pattern={{version}},value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.version != '' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.aliases == 'true' && needs.prepare.outputs.version != '' }}
@@ -171,6 +173,7 @@ jobs:
             type=raw,value=latest,enable=${{ needs.prepare.outputs.aliases == 'true' && needs.prepare.outputs.version != '' }}
           labels: |
             org.opencontainers.image.title=Dockyard ${{ matrix.target }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
       - name: Build and push both architectures
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
