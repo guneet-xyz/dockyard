@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { readFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { describe, expect, it } from "vitest"
@@ -44,6 +45,22 @@ describe("environment-driven ingress configuration", () => {
     expect(stdout).toContain("reverse_proxy https://ui.example.com:8443")
     expect(stdout).toContain("reverse_proxy http://registry_api:5100")
     expect(stdout).not.toContain("reverse_proxy https://ui.example.com:8443/")
+  })
+
+  it("does not redirect when an outer proxy owns the HTTPS public origin", async () => {
+    const { stdout } = await render({
+      APP_URL: "https://dockyard.example.com",
+      INGRESS_PUBLIC_URL: "http://localhost:3000",
+    })
+    expect(stdout).toContain("auto_https off")
+    expect(stdout).not.toContain("redir ")
+    expect(stdout).not.toContain("https://dockyard.example.com {")
+  })
+
+  it("keeps the HTTP-only Compose gateway independent of APP_URL", async () => {
+    const compose = await readFile(new URL("../../deploy/compose.yaml", import.meta.url), "utf8")
+    const line = compose.split("\n").find((value) => value.trim().startsWith("INGRESS_PUBLIC_URL:"))
+    expect(line).toBe("      INGRESS_PUBLIC_URL: ${INGRESS_PUBLIC_URL:-http://localhost:3000}")
   })
 
   it("enables managed HTTPS and redirects to the full public origin, including custom ports", async () => {

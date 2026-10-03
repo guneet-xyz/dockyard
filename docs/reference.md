@@ -81,11 +81,11 @@ Ingress forwards client authorization, registry challenges, digests, upload loca
 
 `dockyard/ingress` generates and validates `/tmp/dockyard-Caddyfile` at startup, then runs Caddy with that generated file. No user-managed Caddyfile or config bind mount is needed. The default HTTP service has **no mounts** and regenerates configuration whenever its container starts.
 
-| Image environment variable | Default                 | Purpose                                                                                                                                                                              |
-| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `INGRESS_PUBLIC_URL`       | `http://localhost:3000` | Origin used by ingress; `http://` selects HTTP, `https://` selects managed HTTPS. Compose defaults this to `APP_URL`, with an explicit override available for an external TLS proxy. |
-| `WEB_UPSTREAM_URL`         | `http://web:3000`       | Root URL for the UI, token endpoint, and internal readiness probe.                                                                                                                   |
-| `REGISTRY_UPSTREAM_URL`    | `http://registry:5000`  | Root URL for `/v2` requests.                                                                                                                                                         |
+| Image environment variable | Default                 | Purpose                                                                                                                                                                                                            |
+| -------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `INGRESS_PUBLIC_URL`       | `http://localhost:3000` | Origin used by ingress; `http://` selects HTTP, `https://` selects managed HTTPS. Compose defaults this independently to HTTP, preventing an HTTPS `APP_URL` from enabling an inner redirect behind another proxy. |
+| `WEB_UPSTREAM_URL`         | `http://web:3000`       | Root URL for the UI, token endpoint, and internal readiness probe.                                                                                                                                                 |
+| `REGISTRY_UPSTREAM_URL`    | `http://registry:5000`  | Root URL for `/v2` requests.                                                                                                                                                                                       |
 
 Upstream URLs support HTTP/HTTPS, custom ports, and bracketed IPv6 addresses. An optional trailing root slash is normalized. Credentials, non-root paths, query strings, fragments, invalid ports, and configuration syntax are rejected before Caddy starts. HTTPS upstream certificates are verified normally; client authorization is never replaced with an upstream credential.
 

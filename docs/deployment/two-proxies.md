@@ -32,7 +32,7 @@ REGISTRY_UPSTREAM_URL=http://registry:5000
 The two URL values intentionally differ:
 
 - `APP_URL` is the public HTTPS origin. Web uses it for origin checks, secure cookies, Docker commands, and the registry's token realm.
-- `INGRESS_PUBLIC_URL` selects **HTTP** for the internal gateway. Leaving it unset would inherit the HTTPS `APP_URL` and make ingress try to manage TLS itself.
+- `INGRESS_PUBLIC_URL` selects **HTTP** for the internal gateway. The current Compose file defaults this independently to HTTP, even when `APP_URL` is HTTPS. Older versions inherited `APP_URL`, so explicitly setting it remains important when upgrading those deployments.
 
 The loopback binding prevents outside clients from bypassing your edge proxy. Keep any administrative restrictions and IP-level rate limits at the edge. The supplied ingress does not trust arbitrary forwarded headers as an authentication source; its HTTP backend hop does not determine the app's configured public origin.
 
@@ -116,6 +116,18 @@ Web login should work without origin errors and should set a Secure/HttpOnly ses
 Do not expose a plaintext gateway to the public internet merely to connect another container. Web and registry remain internal; the edge should target **ingress**, not `web` alone.
 
 ## Troubleshooting
+
+- **`ERR_TOO_MANY_REDIRECTS`:** an inner HTTP-to-HTTPS redirect can send the browser back to the exact same public URL on every request. Keep `APP_URL=https://your-domain` but set `INGRESS_PUBLIC_URL=http://localhost:3000`. The outer proxy should use HTTP to reach ingress; only the outer proxy should enforce HTTPS. Recreate ingress after changing environment variables; `restart` alone does not update them:
+
+  ```sh
+  docker compose --env-file .env -f deploy/compose.yaml up -d --force-recreate --no-deps ingress
+  docker compose --env-file .env -f deploy/compose.yaml exec -T ingress printenv INGRESS_PUBLIC_URL
+  docker compose --env-file .env -f deploy/compose.yaml exec -T ingress cat /tmp/dockyard-Caddyfile
+  curl -I http://127.0.0.1:3000/
+  curl -I https://dockyard.example.com/
+  ```
+
+  The generated ingress config should contain `auto_https off` and no `redir` directive. The internal HTTP response should not redirect to the public HTTPS origin. The public HTTPS response should not redirect to itself. Adapt the host/port to your deployment; for a containerized edge, inspect from the shared network instead of assuming host loopback access. If the settings are already correct, check whether the edge is forwarding to itself or has a conflicting scheme/hostname redirect.
 
 - **Origin rejected or insecure session cookie:** set `APP_URL` to the exact public HTTPS origin and recreate web. Keep `INGRESS_PUBLIC_URL` HTTP for the backend hop.
 - **TLS handshake failure on the internal hop:** ensure the edge uses HTTP to the gateway and the gateway public URL setting selects HTTP.
