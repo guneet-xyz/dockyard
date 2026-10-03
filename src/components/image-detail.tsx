@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
+import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
 import type { ImageTag, Repository, Visibility } from "@/lib/types"
 import { formatBytes, timeAgo } from "@/lib/utils"
 import { useSession } from "@/hooks/use-session"
@@ -446,10 +447,17 @@ export default function ImageDetail({ name }: { name: string }) {
         </TabsContent>
         {canWrite && (
           <TabsContent value="settings">
-            <RepositorySettings
-              key={`${repository.description}:${repository.visibility}`}
-              repository={repository}
-            />
+            <div className="space-y-5">
+              <RepositorySettings
+                key={`${repository.description}:${repository.visibility}`}
+                repository={repository}
+              />
+              <DeleteResourceDialog
+                kind="image"
+                name={repository.name}
+                tagCount={repository.tagCount}
+              />
+            </div>
           </TabsContent>
         )}
       </Tabs>
@@ -461,7 +469,7 @@ export default function ImageDetail({ name }: { name: string }) {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete this image?</DialogTitle>
+            <DialogTitle>Delete this manifest?</DialogTitle>
             <DialogDescription>
               This deletes the manifest for{" "}
               <strong className="text-foreground">{deleting?.name}</strong>. Every tag pointing to

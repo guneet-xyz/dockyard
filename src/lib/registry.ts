@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm"
-import { db } from "./db"
+import { db, type DatabaseExecutor } from "./db"
 import { projects, repositories } from "./db/schema"
 import { config } from "./config"
 import { HttpError } from "./http"
@@ -84,18 +84,18 @@ async function paginatedList(
   throw new HttpError(502, "Registry listing exceeded the page limit.")
 }
 
-export async function repositoryMetadata(name: string) {
+export async function repositoryMetadata(name: string, connection: DatabaseExecutor = db()) {
   repositoryPath(name)
   const identity = repositoryIdentity(name)
   const [metadata, project] = await Promise.all([
-    db()
+    connection
       .select()
       .from(repositories)
       .where(eq(repositories.name, name))
       .limit(1)
       .then((rows) => rows[0]),
     identity.projectName
-      ? db()
+      ? connection
           .select()
           .from(projects)
           .where(eq(projects.name, identity.projectName))
@@ -107,6 +107,7 @@ export async function repositoryMetadata(name: string) {
     name,
     ...identity,
     configured: Boolean(metadata),
+    deleted: Boolean(metadata?.deletedAt || project?.deletedAt),
     projectVisibility: project?.visibility ?? null,
     visibility: effectiveVisibility(
       metadata?.visibility,
@@ -128,19 +129,24 @@ export async function repositoryExists(name: string) {
   }
 }
 
-export async function readableRepository(name: string, user: SessionUser | null) {
-  const metadata = await repositoryMetadata(name)
+export async function readableRepository(
+  name: string,
+  user: SessionUser | null,
+  connection: DatabaseExecutor = db(),
+) {
+  const metadata = await repositoryMetadata(name, connection)
   // Do not disclose existence of private repositories to guests.
-  if (!canRead(user, metadata.visibility)) throw new HttpError(404, "Repository not found.")
+  if (metadata.deleted || !canRead(user, metadata.visibility))
+    throw new HttpError(404, "Repository not found.")
   return metadata
 }
 
-export async function listTags(name: string) {
+export async function listTags(name: string, connection: DatabaseExecutor = db()) {
   try {
     return await paginatedList(`/v2/${repositoryPath(name)}/tags/list`, "tags", name)
   } catch (error) {
     if (error instanceof HttpError && error.status === 404) {
-      const [reserved] = await db()
+      const [reserved] = await connection
         .select({ name: repositories.name })
         .from(repositories)
         .where(eq(repositories.name, name))
@@ -151,26 +157,39 @@ export async function listTags(name: string) {
   }
 }
 
-export async function listRepositories(user: SessionUser | null): Promise<Repository[]> {
+export async function listRepositories(
+  user: SessionUser | null,
+  connection: DatabaseExecutor = db(),
+  includeDeleted = false,
+  projectName?: string,
+): Promise<Repository[]> {
   const [names, metadata, projectRows] = await Promise.all([
     paginatedList("/v2/_catalog", "repositories"),
-    db().select().from(repositories),
-    db().select().from(projects),
+    connection.select().from(repositories),
+    connection.select().from(projects),
   ])
   const byName = new Map(metadata.map((repo) => [repo.name, repo]))
   const byProject = new Map(projectRows.map((project) => [project.name, project]))
   const visible = [...new Set([...names, ...metadata.map((repo) => repo.name)])]
     .sort()
-    .filter((name) =>
-      canRead(
-        user,
-        effectiveVisibility(
-          byName.get(name)?.visibility,
-          byProject.get(repositoryIdentity(name).projectName ?? "")?.visibility,
-          config.defaultVisibility,
-        ),
-      ),
-    )
+    .filter((name) => {
+      // Project operations must not enumerate tags in unrelated namespaces.
+      if (projectName !== undefined && repositoryIdentity(name).projectName !== projectName)
+        return false
+      const meta = byName.get(name)
+      const project = byProject.get(repositoryIdentity(name).projectName ?? "")
+      return (
+        (includeDeleted || (!meta?.deletedAt && !project?.deletedAt)) &&
+        canRead(
+          user,
+          effectiveVisibility(
+            byName.get(name)?.visibility,
+            byProject.get(repositoryIdentity(name).projectName ?? "")?.visibility,
+            config.defaultVisibility,
+          ),
+        )
+      )
+    })
   const results: Repository[] = []
   // Bounded concurrency prevents a large catalog from exhausting the registry.
   for (let i = 0; i < visible.length; i += 8) {
@@ -179,7 +198,7 @@ export async function listRepositories(user: SessionUser | null): Promise<Reposi
         const meta = byName.get(name)
         const identity = repositoryIdentity(name)
         const project = byProject.get(identity.projectName ?? "")
-        const tags = await listTags(name)
+        const tags = await listTags(name, connection)
         return {
           name,
           ...identity,

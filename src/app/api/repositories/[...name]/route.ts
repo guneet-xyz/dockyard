@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { audit, currentUser, requireUser } from "@/lib/auth"
-import { db } from "@/lib/db"
 import { repositories } from "@/lib/db/schema"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 import { canWrite } from "@/lib/permissions"
@@ -12,6 +11,8 @@ import {
   readableRepository,
   repositoryPath,
 } from "@/lib/registry"
+import { withImageResource } from "@/lib/resource-locks"
+import { deleteImageRepository } from "@/lib/resource-deletion"
 
 type Context = { params: Promise<{ name: string[] }> }
 export const dynamic = "force-dynamic"
@@ -66,13 +67,15 @@ export async function PATCH(request: Request, context: Context) {
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))
-    const current = await readableRepository(name, user)
-    if (current.projectVisibility === "private" && input.visibility === "public")
-      throw new HttpError(400, "Images in a private project must be private.")
-    await db()
-      .insert(repositories)
-      .values({ name, ...input })
-      .onConflictDoUpdate({ target: repositories.name, set: { ...input, updatedAt: new Date() } })
+    await withImageResource(name, async (tx) => {
+      const current = await readableRepository(name, user, tx)
+      if (current.projectVisibility === "private" && input.visibility === "public")
+        throw new HttpError(400, "Images in a private project must be private.")
+      await tx
+        .insert(repositories)
+        .values({ name, ...input })
+        .onConflictDoUpdate({ target: repositories.name, set: { ...input, updatedAt: new Date() } })
+    })
     await audit(user.username, "repository.update", name, { visibility: input.visibility })
     return NextResponse.json({ ok: true })
   } catch (error) {
@@ -86,9 +89,25 @@ export async function DELETE(request: Request, context: Context) {
     const user = await requireUser()
     if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
     const name = (await context.params).name.join("/")
-    const { digest } = z.object({ digest: z.string() }).parse(await jsonBody(request))
-    await deleteManifest(name, digest)
-    await audit(user.username, "image.delete", name, { digest })
+    repositoryPath(name)
+    const input = z
+      .union([
+        z.object({ digest: z.string() }).strict(),
+        z.object({ confirmName: z.string() }).strict(),
+      ])
+      .parse(await jsonBody(request))
+    if ("confirmName" in input) {
+      if (input.confirmName !== name)
+        throw new HttpError(400, "Type the exact image path to confirm deletion.")
+      return NextResponse.json(await deleteImageRepository(name, user), {
+        headers: { "Cache-Control": "no-store" },
+      })
+    }
+    await withImageResource(name, async (tx) => {
+      await readableRepository(name, user, tx)
+      await deleteManifest(name, input.digest)
+    })
+    await audit(user.username, "image.delete", name, { digest: input.digest })
     return NextResponse.json({ ok: true })
   } catch (error) {
     return apiError(error)

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm"
-import { db } from "./db"
+import { db, type DatabaseExecutor } from "./db"
 import { projects } from "./db/schema"
 import { config } from "./config"
 import { HttpError } from "./http"
@@ -8,23 +8,29 @@ import { validProjectName } from "./image-names"
 import { listRepositories } from "./registry"
 import type { Project, Repository, SessionUser } from "./types"
 
-export async function projectMetadata(name: string) {
+export async function projectMetadata(name: string, connection: DatabaseExecutor = db()) {
   if (!validProjectName(name)) throw new HttpError(400, "Invalid project name.")
-  const [project] = await db().select().from(projects).where(eq(projects.name, name)).limit(1)
+  const [project] = await connection.select().from(projects).where(eq(projects.name, name)).limit(1)
   return project
 }
 
 export function summarizeProjects(
-  rows: { name: string; description: string; visibility: "public" | "private"; updatedAt: Date }[],
+  rows: {
+    name: string
+    description: string
+    visibility: "public" | "private"
+    updatedAt: Date
+    deletedAt?: Date | null
+  }[],
   images: Repository[],
   user: SessionUser | null,
 ) {
   const byName = new Map<string, Project>()
   const hidden = new Set(
-    rows.filter((row) => !canRead(user, row.visibility)).map((row) => row.name),
+    rows.filter((row) => row.deletedAt || !canRead(user, row.visibility)).map((row) => row.name),
   )
   for (const row of rows) {
-    if (canRead(user, row.visibility))
+    if (!row.deletedAt && canRead(user, row.visibility))
       byName.set(row.name, {
         name: row.name,
         description: row.description,
@@ -65,11 +71,15 @@ export async function listProjects(user: SessionUser | null) {
   }
 }
 
-export async function readableProject(name: string, user: SessionUser | null) {
-  const metadata = await projectMetadata(name)
-  if (metadata && !canRead(user, metadata.visibility))
+export async function readableProject(
+  name: string,
+  user: SessionUser | null,
+  connection: DatabaseExecutor = db(),
+) {
+  const metadata = await projectMetadata(name, connection)
+  if (metadata && (metadata.deletedAt || !canRead(user, metadata.visibility)))
     throw new HttpError(404, "Project not found.")
-  const images = (await listRepositories(user)).filter((image) => image.projectName === name)
+  const images = await listRepositories(user, connection, false, name)
   const [project] = summarizeProjects(metadata ? [metadata] : [], images, user)
   if (!project) throw new HttpError(404, "Project not found.")
   return { project, images }

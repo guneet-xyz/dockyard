@@ -76,6 +76,21 @@ describe("project and image names", () => {
 })
 
 describe("project visibility", () => {
+  it("never rediscovers a deleted project from retained Distribution catalog paths", () => {
+    const rows = [
+      {
+        name: "deleted",
+        description: "Private metadata",
+        visibility: "private" as const,
+        updatedAt: new Date(),
+        deletedAt: new Date(),
+      },
+    ]
+    expect(
+      summarizeProjects(rows, [image("deleted/api"), image("deleted/legacy/deep")], user),
+    ).toEqual([])
+    expect(summarizeProjects(rows, [image("deleted/api")], null)).toEqual([])
+  })
   it("private projects override public images and newly pushed images inherit project defaults", () => {
     expect(effectiveVisibility("public", "private", "public")).toBe("private")
     expect(effectiveVisibility(undefined, "private", "public")).toBe("private")

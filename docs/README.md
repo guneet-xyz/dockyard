@@ -18,7 +18,7 @@ Read [CI/CD and releases](releases.md) for GitHub Actions setup, registry secret
 
 Read [Automation keys](automation-keys.md) for project/image-scoped CI credentials, Docker login, expiry, revocation, and workflow examples.
 
-Read [Projects and images](projects.md) for the `project/image` naming policy, project visibility, and legacy repository compatibility.
+Read [Projects and images](projects.md) for the `project/image` naming policy, project visibility, confirmed image/project deletion, and legacy repository compatibility.
 
 Read [URL, TLS, and port configuration](configuration.md) for the logic behind `APP_URL`, `INGRESS_PUBLIC_URL`, upstream URLs, network bindings, and redirect-loop diagnosis.
 

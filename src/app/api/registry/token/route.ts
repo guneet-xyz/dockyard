@@ -9,6 +9,8 @@ import { repositoryExists, repositoryMetadata } from "@/lib/registry"
 import { validImageRepository } from "@/lib/image-names"
 import { type RegistryAccess, signRegistryToken, registryTokenExpiry } from "@/lib/registry-token"
 import type { SessionUser } from "@/lib/types"
+import { lockImageNamespace } from "@/lib/resource-locks"
+import { db } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -41,50 +43,62 @@ export async function GET(request: Request) {
       .flatMap((scope) => scope.split(" "))
       .filter(Boolean)
     if (scopes.length > 50) throw new HttpError(400, "Too many requested scopes.")
-    const access: RegistryAccess[] = []
-    for (const scope of scopes) {
-      const [type, name, rawActions, extra] = scope.split(":")
-      if (!name || !rawActions || extra) throw new HttpError(400, "Invalid scope.")
-      if (type === "repository" && validRepositoryName(name)) {
-        const metadata = await repositoryMetadata(name)
-        let actions = key
-          ? allowedKeyActions(
-              key.grants,
-              user!.role,
-              metadata.visibility,
-              name,
-              rawActions.split(","),
-            )
-          : allowedActions(user?.role ?? null, metadata.visibility, rawActions.split(","))
-        if (
-          actions.includes("push") &&
-          !validImageRepository(name) &&
-          !metadata.configured &&
-          !(await repositoryExists(name))
-        ) {
-          actions = actions.filter((action) => action !== "push" && action !== "delete")
+    const credentials = await db().transaction(async (tx) => {
+      // Retain shared locks through signing, including multi-resource requests.
+      // Deletion cannot commit between permission calculation and JWT issuance.
+      const names = [
+        ...new Set(
+          scopes
+            .map((scope) => scope.split(":"))
+            .filter(([type, name]) => type === "repository" && validRepositoryName(name ?? ""))
+            .map(([, name]) => name),
+        ),
+      ].sort()
+      for (const name of names) await lockImageNamespace(tx, name, false)
+      const access: RegistryAccess[] = []
+      for (const scope of scopes) {
+        const [type, name, rawActions, extra] = scope.split(":")
+        if (!name || !rawActions || extra) throw new HttpError(400, "Invalid scope.")
+        if (type === "repository" && validRepositoryName(name)) {
+          const metadata = await repositoryMetadata(name, tx)
+          let actions = key
+            ? allowedKeyActions(
+                key.grants,
+                user!.role,
+                metadata.visibility,
+                name,
+                rawActions.split(","),
+              )
+            : allowedActions(user?.role ?? null, metadata.visibility, rawActions.split(","))
+          if (metadata.deleted) actions = []
+          if (
+            actions.includes("push") &&
+            !validImageRepository(name) &&
+            !metadata.configured &&
+            !(await repositoryExists(name))
+          ) {
+            actions = actions.filter((action) => action !== "push" && action !== "delete")
+          }
+          access.push({
+            type,
+            name,
+            actions,
+          })
+        } else if (type === "registry" && name === "catalog") {
+          access.push({
+            type,
+            name,
+            actions:
+              !key && user?.role === "admin" && rawActions.split(",").includes("*") ? ["*"] : [],
+          })
         }
-        access.push({
-          type,
-          name,
-          actions,
-        })
-      } else if (type === "registry" && name === "catalog") {
-        access.push({
-          type,
-          name,
-          actions:
-            !key && user?.role === "admin" && rawActions.split(",").includes("*") ? ["*"] : [],
-        })
       }
-    }
-    const token = await signRegistryToken(
-      key?.subject ?? user?.username ?? "",
-      access,
-      key?.expiresAt ?? null,
-    )
-    return NextResponse.json(
-      {
+      const token = await signRegistryToken(
+        key?.subject ?? user?.username ?? "",
+        access,
+        key?.expiresAt ?? null,
+      )
+      return {
         token,
         access_token: token,
         expires_in: Math.max(
@@ -92,9 +106,9 @@ export async function GET(request: Request) {
           registryTokenExpiry(key?.expiresAt ?? null) - Math.floor(Date.now() / 1000),
         ),
         issued_at: new Date().toISOString(),
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    )
+      }
+    })
+    return NextResponse.json(credentials, { headers: { "Cache-Control": "no-store" } })
   } catch (error) {
     const response = apiError(error)
     if (response.status === 401) response.headers.set("WWW-Authenticate", 'Basic realm="Dockyard"')

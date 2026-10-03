@@ -45,6 +45,7 @@ export const projects = pgTable("projects", {
   visibility: visibilityEnum("visibility").notNull().default("public"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 })
 
 export const accessKeys = pgTable(
@@ -72,6 +73,7 @@ export const repositories = pgTable("repositories", {
   visibility: visibilityEnum("visibility").notNull().default("public"),
   description: text("description").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 })
 
 export const auditEvents = pgTable(

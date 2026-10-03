@@ -1,13 +1,13 @@
 import { timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { db } from "@/lib/db"
 import { auditEvents, projects, repositories } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
 import { repositoryIdentity } from "@/lib/image-names"
 import { config } from "@/lib/config"
 import { apiError, HttpError } from "@/lib/http"
 import { validRepositoryName } from "@/lib/permissions"
+import { withImageResource } from "@/lib/resource-locks"
 
 const eventSchema = z.object({
   events: z
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
         (!type.includes("manifest") && !type.includes("image.index"))
       )
         continue
-      await db().transaction(async (tx) => {
+      await withImageResource(name, async (tx) => {
         const inserted = await tx
           .insert(auditEvents)
           .values({
@@ -66,6 +66,7 @@ export async function POST(request: Request) {
         if (!inserted.length) return
         const { projectName } = repositoryIdentity(name)
         let visibility = config.defaultVisibility
+        let deletedAt: Date | null = null
         if (projectName) {
           await tx.insert(projects).values({ name: projectName, visibility }).onConflictDoNothing()
           const [project] = await tx
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
             .where(eq(projects.name, projectName))
             .limit(1)
           visibility = project.visibility
+          deletedAt = project.deletedAt
         }
         await tx
           .insert(repositories)
@@ -81,10 +83,11 @@ export async function POST(request: Request) {
             name,
             visibility,
             updatedAt: new Date(event.timestamp),
+            deletedAt,
           })
           .onConflictDoUpdate({
             target: repositories.name,
-            set: { updatedAt: new Date(event.timestamp) },
+            set: { updatedAt: new Date(event.timestamp), ...(deletedAt ? { deletedAt } : {}) },
           })
       })
     }

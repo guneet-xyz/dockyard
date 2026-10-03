@@ -245,6 +245,85 @@ test("automation key can be rotated, downloaded once, and revoked", async ({ pag
   await expect(page.getByText("Rotated automation key", { exact: true }).first()).toBeVisible()
 })
 
+test("image and project deletion require typed confirmation, survive errors, and stay deleted", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.TEST_ADMIN_PASSWORD,
+    "Set TEST_ADMIN_PASSWORD to enable deletion browser checks",
+  )
+  const base = process.env.TEST_APP_URL ?? "http://localhost:3000"
+  const headers = { Origin: new URL(base).origin }
+  const login = await page.request.post(`${base}/api/auth/login`, {
+    headers,
+    data: {
+      username: process.env.TEST_ADMIN_USERNAME ?? "admin",
+      password: process.env.TEST_ADMIN_PASSWORD!,
+    },
+  })
+  expect(login.status()).toBe(200)
+  const project = `delete-browser-${Date.now().toString(36)}`
+  const image = `${project}/app`
+  expect(
+    (
+      await page.request.post(`${base}/api/projects`, {
+        headers,
+        data: { name: project, visibility: "public" },
+      })
+    ).status(),
+  ).toBe(201)
+  expect(
+    (
+      await page.request.post(`${base}/api/repositories`, {
+        headers,
+        data: { name: image, visibility: "public" },
+      })
+    ).status(),
+  ).toBe(201)
+  await page.goto(`/projects/${project}/images/app`)
+  await page.getByRole("tab", { name: "Settings", exact: true }).click()
+  await page.getByRole("button", { name: "Delete image", exact: true }).click()
+  const imageDialog = page.getByRole("dialog", { name: "Delete this image?" })
+  const deleteImage = imageDialog.getByRole("button", { name: "Delete image", exact: true })
+  await expect(deleteImage).toBeDisabled()
+  await imageDialog.getByLabel("Confirm image name", { exact: true }).fill("wrong")
+  await expect(deleteImage).toBeDisabled()
+  await imageDialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await page.getByRole("button", { name: "Delete image", exact: true }).click()
+  await expect(imageDialog.getByLabel("Confirm image name", { exact: true })).toHaveValue("")
+  await imageDialog.getByLabel("Confirm image name", { exact: true }).fill(image)
+  await expect(deleteImage).toBeEnabled()
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(
+    await imageDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1),
+  ).toBe(true)
+  await page.route(`**/api/repositories/${image}`, (route) =>
+    route.request().method() === "DELETE"
+      ? route.fulfill({ status: 503, json: { error: "Deletion test registry unavailable" } })
+      : route.continue(),
+  )
+  await deleteImage.click()
+  await expect(page.getByText("Deletion test registry unavailable", { exact: true })).toBeVisible()
+  await expect(imageDialog).toBeVisible()
+  await expect(imageDialog.getByLabel("Confirm image name", { exact: true })).toHaveValue(image)
+  await page.unroute(`**/api/repositories/${image}`)
+  await deleteImage.click()
+  await expect(page).toHaveURL(new RegExp(`/projects/${project}$`))
+  await expect(page.getByRole("link", { name: "app", exact: true })).toHaveCount(0)
+  expect((await page.request.get(`${base}/api/repositories/${image}`)).status()).toBe(404)
+  await page.getByRole("tab", { name: "Project settings", exact: true }).click()
+  await page.getByRole("button", { name: "Delete project", exact: true }).click()
+  const projectDialog = page.getByRole("dialog", { name: "Delete this project?" })
+  const deleteProject = projectDialog.getByRole("button", { name: "Delete project", exact: true })
+  await expect(deleteProject).toBeDisabled()
+  await projectDialog.getByLabel("Confirm project name", { exact: true }).fill(project)
+  await deleteProject.click()
+  await expect(page).toHaveURL(/\/projects$/)
+  await page.reload()
+  await expect(page.getByRole("heading", { name: project, exact: true })).toHaveCount(0)
+  expect((await page.request.get(`${base}/api/projects/${project}`)).status()).toBe(404)
+})
+
 test("automation resource selects handle fetch failures and empty collections", async ({
   page,
 }) => {

@@ -17,3 +17,8 @@ function client() {
 export function db() {
   return drizzle(client(), { schema })
 }
+
+export type DatabaseExecutor = Pick<
+  ReturnType<typeof db>,
+  "select" | "insert" | "update" | "delete" | "execute"
+>

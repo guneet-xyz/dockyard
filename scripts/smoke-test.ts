@@ -1031,6 +1031,541 @@ async function main() {
     401,
     "Anonymous raw catalog blocked",
   )
+  const deletionProject = `delete_${suffix}`
+  const siblingProject = `${deletionProject}-other`
+  const deletingImage = `${deletionProject}/api`
+  const indexImage = `${deletionProject}/multi`
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: deletionProject, visibility: "private" },
+      maintainerCookie,
+    ),
+    201,
+    "Create deletion fixture project",
+  )
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: siblingProject, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Create prefix-sharing neighboring project",
+  )
+  for (const name of [deletingImage, indexImage, `${deletionProject}/reserved`]) {
+    await check(
+      await browser("/api/repositories", "POST", { name, visibility: "private" }, maintainerCookie),
+      201,
+      "Reserve deletion fixture image",
+    )
+  }
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `${siblingProject}/safe`, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Reserve unaffected neighbor",
+  )
+  const deletionKey = await check(
+    await browser(
+      "/api/keys",
+      "POST",
+      {
+        name: `deletion-key-${suffix}`,
+        grants: [{ type: "project", target: deletionProject, actions: ["pull", "push", "delete"] }],
+      },
+      maintainerCookie,
+    ),
+    201,
+    "Create key for deletion access checks",
+  )
+  const deletingToken = await token(`repository:${deletingImage}:pull,push,delete`, maintainer)
+  await uploadBlob(deletingImage, deletingToken, config)
+  for (const tag of ["latest", "stable", "previous"]) {
+    const body =
+      tag === "previous"
+        ? JSON.stringify({
+            ...JSON.parse(manifest),
+            annotations: { "org.opencontainers.image.version": "previous" },
+          })
+        : manifest
+    await check(
+      await registryCall(
+        `/v2/${deletingImage}/manifests/${tag}`,
+        deletingToken,
+        "PUT",
+        body,
+        "application/vnd.oci.image.manifest.v1+json",
+      ),
+      201,
+      "Push root manifest and alias deletion fixtures",
+    )
+  }
+  const multiToken = await token(`repository:${indexImage}:pull,push,delete`, maintainer)
+  await uploadBlob(indexImage, multiToken, config)
+  const childDigest = `sha256:${createHash("sha256").update(manifest).digest("hex")}`
+  await check(
+    await registryCall(
+      `/v2/${indexImage}/manifests/${childDigest}`,
+      multiToken,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "Push untagged index child manifest",
+  )
+  const indexManifest = JSON.stringify({
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.index.v1+json",
+    manifests: [
+      {
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        digest: childDigest,
+        size: Buffer.byteLength(manifest),
+        platform: { os: "linux", architecture: "arm64" },
+      },
+    ],
+  })
+  for (const tag of ["latest", "release"])
+    await check(
+      await registryCall(
+        `/v2/${indexImage}/manifests/${tag}`,
+        multiToken,
+        "PUT",
+        indexManifest,
+        "application/vnd.oci.image.index.v1+json",
+      ),
+      201,
+      "Push OCI index alias fixture",
+    )
+  await check(
+    await browser(`/api/repositories/${deletingImage}`, "DELETE", { confirmName: deletingImage }),
+    401,
+    "Guests cannot delete image repositories",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      { confirmName: deletingImage },
+      viewerCookie,
+    ),
+    403,
+    "Viewers cannot delete image repositories",
+  )
+  await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: deletionProject },
+      viewerCookie,
+    ),
+    403,
+    "Viewers cannot delete projects",
+  )
+  await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: deletionProject },
+      undefined,
+    ),
+    401,
+    "Guests cannot delete projects",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      { confirmName: deletingImage },
+      maintainerCookie,
+      "http://evil.example",
+    ),
+    403,
+    "Cross-origin image deletion rejected",
+  )
+  await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: deletionProject },
+      maintainerCookie,
+      "http://evil.example",
+    ),
+    403,
+    "Cross-origin project deletion rejected",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      { confirmName: "wrong" },
+      maintainerCookie,
+    ),
+    400,
+    "Image deletion requires exact path confirmation",
+  )
+  await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: "wrong" },
+      maintainerCookie,
+    ),
+    400,
+    "Project deletion requires exact name confirmation",
+  )
+  await check(
+    await browser(`/api/repositories/${deletingImage}`, "DELETE", {}, maintainerCookie),
+    400,
+    "Empty deletion body is not a bulk delete",
+  )
+  await check(
+    await fetch(`${app}/api/projects/${deletionProject}`, {
+      method: "DELETE",
+      headers: {
+        Origin: app,
+        "Content-Type": "application/json",
+        Authorization: `Basic ${Buffer.from(`${deletionKey.username}:${deletionKey.secret}`).toString("base64")}`,
+      },
+      body: JSON.stringify({ confirmName: deletionProject }),
+    }),
+    401,
+    "Registry keys cannot delete projects through browser APIs",
+  )
+  const removedImage = await check(
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      { confirmName: deletingImage },
+      maintainerCookie,
+    ),
+    200,
+    "Maintainer deletes complete image repository",
+  )
+  assert.equal(
+    removedImage.deletedManifests,
+    2,
+    "Alias tags must not cause duplicate digest deletion",
+  )
+  assertions++
+  await check(
+    await browser(`/api/repositories/${deletingImage}`, "GET", undefined, adminCookie),
+    404,
+    "Deleted image details remain hidden from admins",
+  )
+  const afterImageDeletion = await check(
+    await browser("/api/repositories", "GET", undefined, adminCookie),
+    200,
+    "Catalog after complete image deletion",
+  )
+  assert.ok(
+    !afterImageDeletion.repositories.some(
+      (image: { name: string }) => image.name === deletingImage,
+    ),
+  )
+  assertions++
+  for (const name of [undefined, username, deletionKey.username]) {
+    const scoped = await token(
+      `repository:${deletingImage}:pull,push,delete`,
+      name,
+      name === deletionKey.username
+        ? deletionKey.secret
+        : name === username
+          ? password!
+          : testPassword,
+    )
+    assert.deepEqual(
+      JSON.parse(Buffer.from(scoped.split(".")[1], "base64url").toString()).access[0].actions,
+      [],
+    )
+    assertions++
+  }
+  await check(
+    await browser(`/api/projects/${deletionProject}`, "GET", undefined, maintainerCookie),
+    200,
+    "Deleting one image leaves its project intact",
+  )
+  await check(
+    await registryCall(
+      `/v2/${deletingImage}/manifests/cached-token-push`,
+      deletingToken,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "Previously issued token retains its documented short-lived rights",
+  )
+  const webhookSecret = process.env.REGISTRY_WEBHOOK_SECRET
+  async function pushNotification(name: string) {
+    if (!webhookSecret) return
+    await check(
+      await fetch(`${app}/api/registry/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${webhookSecret}` },
+        body: JSON.stringify({
+          events: [
+            {
+              id: randomUUID(),
+              action: "push",
+              timestamp: new Date().toISOString(),
+              actor: { name: maintainer },
+              target: {
+                repository: name,
+                mediaType: "application/vnd.oci.image.manifest.v1+json",
+                digest: childDigest,
+                tag: "cached-token-push",
+              },
+            },
+          ],
+        }),
+      }),
+      200,
+      "Deliver delayed registry push notification",
+    )
+  }
+  await pushNotification(deletingImage)
+  const afterLatePush = await check(
+    await browser("/api/repositories", "GET", undefined, adminCookie),
+    200,
+    "Deleted image stays hidden after cached-token push and webhook",
+  )
+  assert.ok(
+    !afterLatePush.repositories.some((image: { name: string }) => image.name === deletingImage),
+  )
+  assertions++
+  await check(
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      { confirmName: deletingImage },
+      maintainerCookie,
+    ),
+    200,
+    "Re-deletion cleans late cached-token manifests without reviving the image",
+  )
+  if (webhookSecret) {
+    for (const legacy of [deletionProject, `${deletionProject}/legacy/deep`]) {
+      await pushNotification(legacy)
+      const legacyToken = await token(`repository:${legacy}:pull,push`, maintainer)
+      await uploadBlob(legacy, legacyToken, config)
+      await check(
+        await registryCall(
+          `/v2/${legacy}/manifests/latest`,
+          legacyToken,
+          "PUT",
+          manifest,
+          "application/vnd.oci.image.manifest.v1+json",
+        ),
+        201,
+        "Push discovered legacy deletion fixture",
+      )
+    }
+  }
+  const futureName = `${deletionProject}/late`
+  const futureDeletionToken = await token(`repository:${futureName}:pull,push`, maintainer)
+  const deletedProject = await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: deletionProject },
+      maintainerCookie,
+    ),
+    200,
+    "Maintainer deletes project, OCI index, aliases, reservations, and nested legacy images",
+  )
+  assert.ok(deletedProject.deletedImages >= 3)
+  assert.ok(deletedProject.deletedManifests >= 1)
+  assertions += 2
+  await check(
+    await browser(`/api/projects/${deletionProject}`, "GET", undefined, adminCookie),
+    404,
+    "Deleted project detail is gone",
+  )
+  const projectCatalog = await check(
+    await browser("/api/projects", "GET", undefined, adminCookie),
+    200,
+    "Deleted projects do not reappear from Distribution catalog names",
+  )
+  assert.ok(
+    !projectCatalog.projects.some((project: { name: string }) => project.name === deletionProject),
+  )
+  assertions++
+  await check(
+    await browser(`/api/repositories/${siblingProject}/safe`, "GET", undefined, maintainerCookie),
+    200,
+    "Prefix-sharing neighbor is not deleted",
+  )
+  if (webhookSecret)
+    await check(
+      await browser(`/api/repositories/${deletionProject}`, "GET", undefined, maintainerCookie),
+      200,
+      "Flat legacy image with matching project word is not a project member",
+    )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `${deletionProject}/new`, visibility: "public" },
+      maintainerCookie,
+    ),
+    409,
+    "Deleted project cannot be silently recreated by creating an image",
+  )
+  for (const name of [indexImage, futureName]) {
+    const closed = await token(`repository:${name}:pull,push,delete`, username, password!)
+    assert.deepEqual(
+      JSON.parse(Buffer.from(closed.split(".")[1], "base64url").toString()).access[0].actions,
+      [],
+    )
+    assertions++
+  }
+  await uploadBlob(futureName, futureDeletionToken, config)
+  await check(
+    await registryCall(
+      `/v2/${futureName}/manifests/latest`,
+      futureDeletionToken,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "Cached token can finish a previously authorized project push",
+  )
+  await pushNotification(futureName)
+  await check(
+    await browser(`/api/repositories/${futureName}`, "GET", undefined, adminCookie),
+    404,
+    "Late child notification cannot restore a deleted project",
+  )
+  await check(
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "DELETE",
+      { confirmName: deletionProject },
+      maintainerCookie,
+    ),
+    200,
+    "Project deletion is retryable after late pushes",
+  )
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: deletionProject, visibility: "private" },
+      maintainerCookie,
+    ),
+    201,
+    "Explicitly recreate deleted project",
+  )
+  const recreated = await check(
+    await browser(`/api/projects/${deletionProject}`, "GET", undefined, maintainerCookie),
+    200,
+    "Recreated project does not restore its deleted images",
+  )
+  assert.deepEqual(recreated.images, [])
+  assertions++
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: indexImage, visibility: "private" },
+      maintainerCookie,
+    ),
+    201,
+    "Explicitly recreate one deleted image",
+  )
+  await check(
+    await browser(`/api/repositories/${indexImage}`, "GET", undefined, maintainerCookie),
+    200,
+    "Recreated image becomes readable again",
+  )
+  await check(
+    await browser(`/api/repositories/${indexImage}`),
+    404,
+    "Recreated private image is not leaked to guests",
+  )
+  const reopened = await token(
+    `repository:${indexImage}:pull,push`,
+    deletionKey.username,
+    deletionKey.secret,
+  )
+  assert.deepEqual(
+    JSON.parse(Buffer.from(reopened.split(".")[1], "base64url").toString()).access[0].actions,
+    ["pull", "push"],
+  )
+  assertions++
+  if (webhookSecret) {
+    await check(
+      await browser(
+        "/api/repositories",
+        "POST",
+        { name: `${deletionProject}/legacy/deep`, visibility: "private" },
+        maintainerCookie,
+      ),
+      201,
+      "Explicitly recreate a retired nested legacy path",
+    )
+    await check(
+      await browser(
+        `/api/repositories/${deletionProject}`,
+        "DELETE",
+        { confirmName: deletionProject },
+        maintainerCookie,
+      ),
+      200,
+      "Delete the independent flat legacy image",
+    )
+    await check(
+      await browser(
+        "/api/repositories",
+        "POST",
+        { name: deletionProject, visibility: "private" },
+        maintainerCookie,
+      ),
+      201,
+      "Explicitly recreate a retired flat legacy path without permitting new flat names",
+    )
+  }
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: `empty-${suffix}`, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Create empty project deletion fixture",
+  )
+  await check(
+    await browser(
+      `/api/projects/empty-${suffix}`,
+      "DELETE",
+      { confirmName: `empty-${suffix}` },
+      maintainerCookie,
+    ),
+    200,
+    "Delete empty configured project",
+  )
+  await check(
+    await browser(
+      `/api/projects/does-not-exist-${suffix}`,
+      "DELETE",
+      { confirmName: `does-not-exist-${suffix}` },
+      maintainerCookie,
+    ),
+    404,
+    "Missing project deletion returns 404",
+  )
+
   await check(
     await browser(`/api/users/${created.id}`, "PATCH", { role: "viewer" }, adminCookie),
     200,

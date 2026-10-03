@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, Box, FolderOpen, Loader2, Search, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
+import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
 import type { Project, Repository, Visibility } from "@/lib/types"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { RepositoryTable, EmptyRepositories } from "@/components/repository-table"
@@ -198,10 +199,18 @@ export default function ProjectPage() {
         </TabsContent>
         {canWrite && (
           <TabsContent value="settings">
-            <ProjectSettings
-              key={`${project.description}:${project.visibility}`}
-              project={project}
-            />
+            <div className="space-y-5">
+              <ProjectSettings
+                key={`${project.description}:${project.visibility}`}
+                project={project}
+              />
+              <DeleteResourceDialog
+                kind="project"
+                name={project.name}
+                imageCount={project.imageCount}
+                tagCount={project.tagCount}
+              />
+            </div>
           </TabsContent>
         )}
       </Tabs>

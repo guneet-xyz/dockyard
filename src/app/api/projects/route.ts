@@ -2,12 +2,13 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { audit, currentUser, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
-import { db } from "@/lib/db"
 import { projects } from "@/lib/db/schema"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 import { validProjectName } from "@/lib/image-names"
 import { canWrite } from "@/lib/permissions"
 import { listProjects } from "@/lib/projects"
+import { isNotNull } from "drizzle-orm"
+import { withProjectResource } from "@/lib/resource-locks"
 
 export const dynamic = "force-dynamic"
 
@@ -42,7 +43,18 @@ export async function POST(request: Request) {
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))
-    const [project] = await db().insert(projects).values(input).onConflictDoNothing().returning()
+    const project = await withProjectResource(input.name, async (tx) => {
+      const [created] = await tx
+        .insert(projects)
+        .values(input)
+        .onConflictDoUpdate({
+          target: projects.name,
+          set: { ...input, deletedAt: null, createdAt: new Date(), updatedAt: new Date() },
+          setWhere: isNotNull(projects.deletedAt),
+        })
+        .returning()
+      return created
+    })
     if (!project) throw new HttpError(409, "That project already exists.")
     await audit(user.username, "project.create", input.name, { visibility: input.visibility })
     return NextResponse.json(project, { status: 201 })
