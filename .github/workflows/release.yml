@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing stable release to republish (e.g. v1.0.0); empty runs the normal release flow
+        description: Existing release to republish (e.g. v0.1.0); empty runs the normal release flow
         type: string
         required: false
         default: ""

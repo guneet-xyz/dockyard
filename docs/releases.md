@@ -28,7 +28,7 @@ The registry must be reachable from GitHub-hosted runners over HTTPS with a publ
 
 ## Automatic versions from conventional commits
 
-Release Please maintains one release PR for the whole application, updating `package.json`, `.release-please-manifest.json`, and `CHANGELOG.md`. There are no independent component versions or npm publication. Generated `CHANGELOG.md` is excluded from Prettier so its generated formatting does not fail CI.
+Release Please maintains one release PR for the whole application, updating `package.json`, `.release-please-manifest.json`, and `CHANGELOG.md`. There are no independent component versions or npm publication. Generated `CHANGELOG.md` and `.release-please-manifest.json` are excluded from Prettier so their generated formatting does not fail CI; the manifest is still parsed and checked against the package version in unit tests.
 
 | Commit example                                       | Version impact               |
 | ---------------------------------------------------- | ---------------------------- |
@@ -40,7 +40,7 @@ Release Please maintains one release PR for the whole application, updating `pac
 
 Use conventional commit messages when committing directly, or use a conventional **PR title** when squash-merging. For a breaking-change footer, preserve it in the squash commit body. A batch of commits takes the highest applicable bump, not one release per commit.
 
-The first public release starts at **`1.0.0`**, matching the current package version; there is no prior Git release/tag to seed. The empty manifest bootstraps the first release from existing conventional history. After that, Release Please tracks the last released version automatically. Do not manually change the manifest or package version for normal releases.
+The first public release starts at **`0.1.0`**, matching the bootstrap package version; there is no prior Git release/tag to seed. The empty manifest bootstraps the first release from existing conventional history. After that, Release Please tracks the last released version automatically. Do not manually change the manifest or package version for normal releases.
 
 **Merge the release PR to approve a stable release.** Release Please then creates the Git tag `vMAJOR.MINOR.PATCH` and a GitHub release with generated notes. Stable publication runs in the same workflow using Release Please's exact release SHA, not whatever happens to be the latest branch head. Quality, unit, registry integration, Docker CLI, and browser checks must pass for that source before any image is pushed.
 
@@ -69,7 +69,7 @@ Preserve existing secrets and data. Set these non-secret values in your deployme
 ```dotenv
 DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard
 # Replace with a version whose entire publication workflow has succeeded.
-DOCKYARD_IMAGE_TAG=1.0.0
+DOCKYARD_IMAGE_TAG=0.1.0
 ```
 
 Then omit the local-build override:
@@ -87,7 +87,7 @@ docker compose --env-file .env -f deploy/compose.yaml up --wait --wait-timeout 2
 
 A GitHub release/tag may already exist when a build or push fails. Fix the cause (key expiry/grants, registry availability, build failure), then **rerun failed jobs** in that workflow; do not rerun its successful release-preparation job or create another version just to retry an upload. The run summary records each successfully pushed image's index digest and tags.
 
-For a later retry, run **Release and publish → Run workflow** on **main**, set `release_tag` to the existing stable GitHub release (for example `v1.0.0`), and leave `update_latest` off. This validates the release tag, its ancestry on `main`, and its package version, tests that exact source, then republishes the full version and SHA tags without moving `edge`, `latest`, or major/minor aliases. Only turn `update_latest` on when intentionally restoring the current stable release; enabling it for an older release moves those aliases backwards. Recovery takes workflow definitions from main while building the selected release's source.
+For a later retry, run **Release and publish → Run workflow** on **main**, set `release_tag` to the existing GitHub release (for example `v0.1.0`), and leave `update_latest` off. This validates the release tag, its ancestry on `main`, and its package version, tests that exact source, then republishes the full version and SHA tags without moving `edge`, `latest`, or major/minor aliases. Only turn `update_latest` on when intentionally restoring the current stable release; enabling it for an older release moves those aliases backwards. Recovery takes workflow definitions from main while building the selected release's source.
 
 This setup does not upload anything locally or modify GitHub repository settings/secrets automatically. Add the secrets, enable PR creation, and push the committed workflow configuration to activate it.
 

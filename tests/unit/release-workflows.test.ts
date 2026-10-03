@@ -108,9 +108,10 @@ describe("release and publishing workflow contracts", () => {
     expect(Object.keys(config.packages)).toEqual(["."])
     expect(config.packages["."]["release-type"]).toBe("node")
     expect(config.packages["."]["include-component-in-tag"]).toBe(false)
-    expect(config.packages["."]["initial-version"]).toBe("1.0.0")
+    expect(config.packages["."]["initial-version"]).toBe("0.1.0")
     if (manifest["."]) expect(manifest["."]).toBe(JSON.parse(load("package.json")).version)
     expect(load(".prettierignore")).toContain("CHANGELOG.md")
+    expect(load(".prettierignore")).toContain(".release-please-manifest.json")
   })
 
   it("uses a configurable published namespace for all four Compose images", () => {
@@ -122,6 +123,61 @@ describe("release and publishing workflow contracts", () => {
     }
     expect(compose.services.postgres.image).toBe("postgres:17-alpine")
     expect(compose.services.registry.image).toBe("registry:3.1.2")
+  })
+})
+
+describe("publication preflight and early-failure cleanup", () => {
+  const preflight = publish.jobs.images.steps!.find(
+    (step) => step.name === "Check release version and registry credentials",
+  )!.run!
+  const version = JSON.parse(load("package.json")).version as string
+  function checkCredentials(env: Record<string, string>) {
+    return execute("/bin/bash", ["-c", preflight], {
+      cwd: root,
+      env: {
+        ...process.env,
+        DOCKER_USERNAME: "test-user",
+        DOCKER_PASSWORD: "test-secret",
+        RELEASE_VERSION: "",
+        ...env,
+      },
+    })
+  }
+  it("accepts environment credentials for development and version-matching releases", async () => {
+    await expect(checkCredentials({})).resolves.toMatchObject({ stdout: "" })
+    await expect(checkCredentials({ RELEASE_VERSION: version })).resolves.toMatchObject({
+      stdout: "",
+    })
+  })
+  it.each(["DOCKER_USERNAME", "DOCKER_PASSWORD"])(
+    "fails clearly when %s is missing without printing the other secret",
+    async (key) => {
+      await expect(checkCredentials({ [key]: "" })).rejects.toMatchObject({
+        code: 1,
+        stderr: "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment\n",
+      })
+    },
+  )
+  it("refuses to label source with a different or prerelease version", async () => {
+    await expect(checkCredentials({ RELEASE_VERSION: "999.0.0" })).rejects.toMatchObject({
+      code: 1,
+    })
+    await expect(checkCredentials({ RELEASE_VERSION: `${version}-rc.1` })).rejects.toMatchObject({
+      code: 1,
+    })
+  })
+  it("skips Compose logs and cleanup when failure occurs before environment generation", async () => {
+    const folder = await mkdtemp(
+      join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "dockyard-cleanup-test-"),
+    )
+    folders.push(folder)
+    for (const name of ["Service logs on failure", "Stop test services"]) {
+      const script = ci.jobs.checks.steps!.find((step) => step.name === name)!.run!
+      await expect(execute("/bin/bash", ["-c", script], { cwd: folder })).resolves.toMatchObject({
+        stdout: "",
+        stderr: "",
+      })
+    }
   })
 })
 

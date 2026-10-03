@@ -45,7 +45,10 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$DOCKER_USERNAME" && test -n "$DOCKER_PASSWORD" || { echo "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment" >&2; exit 1; }
+          if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ]; then
+            echo "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment" >&2
+            exit 1
+          fi
           node -e 'const version = process.env.RELEASE_VERSION; if (version && (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) || require("./package.json").version !== version)) throw new Error("Release version must match package.json")'
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
         with:

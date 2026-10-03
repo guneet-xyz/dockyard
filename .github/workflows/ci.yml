@@ -87,7 +87,13 @@ jobs:
           TEST_ADMIN_PASSWORD="$ADMIN_PASSWORD" pnpm test:e2e
       - name: Service logs on failure
         if: failure()
-        run: docker compose --env-file .env -f deploy/compose.yaml logs --no-color
+        run: |
+          if [ -f .env ]; then
+            docker compose --env-file .env -f deploy/compose.yaml logs --no-color
+          fi
       - name: Stop test services
         if: always()
-        run: docker compose --env-file .env -f deploy/compose.yaml down
+        run: |
+          if [ -f .env ]; then
+            docker compose --env-file .env -f deploy/compose.yaml down
+          fi
