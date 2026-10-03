@@ -52,14 +52,14 @@ The initial UI intentionally starts empty. Create repositories or push real imag
 | `deploy/compose.yaml`       | Image-only deployment: uses cached prebuilt images or pulls missing ones. Contains no build definitions.                                              |
 | `deploy/compose.build.yaml` | Local-build override: builds `dockyard/init`, `dockyard/migrate`, `dockyard/web`, and `dockyard/ingress` from this checkout rather than pulling them. |
 
-For prebuilt images, set `DOCKYARD_IMAGE_TAG` to an available tag, then run:
+For prebuilt images, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an available full released version (without `v`), or `latest`, then run:
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml pull
 docker compose --env-file .env -f deploy/compose.yaml up -d
 ```
 
-Those image tags must already exist in the configured registry or your local image cache; this repository does not currently publish images automatically. For a fresh source checkout, use `compose.build.yaml` as shown in the quick start. `--build` alone does not add build definitions to the base file.
+GitHub Actions publishes all four images for `linux/amd64` and `linux/arm64`; see [CI/CD and releases](releases.md) for setup and tagging. Tags must exist before pulling; `local` is only for source builds and is never published. For a fresh source checkout, use `compose.build.yaml` as shown in the quick start. `--build` alone does not add build definitions to the base file. The default prefix is now `cr.guneet.dev/dockyard`; set `DOCKYARD_IMAGE_PREFIX=dockyard` to keep using a previously built unqualified local cache. Image-prefix changes leave persistent volumes and runtime configuration unchanged.
 
 The build override inherits image names/tags and all runtime settings from the base file. PostgreSQL and Distribution still use their upstream images. It does not change dependencies, ports, or volumes. Operational commands such as `ps`, `logs`, `exec`, and `down` can use just the base file; include the build override when starting/rebuilding local source images.
 
@@ -105,7 +105,7 @@ Inspect generated configuration without running a server using `docker run --rm 
 
 ### Images and startup jobs
 
-One multi-stage `Dockerfile` builds four Dockyard images through `compose.build.yaml`. `DOCKYARD_IMAGE_TAG` defaults to `local` for source builds; choose an available published tag when using prebuilt images:
+One multi-stage `Dockerfile` builds four Dockyard images through `compose.build.yaml`. `DOCKYARD_IMAGE_PREFIX` defaults to `cr.guneet.dev/dockyard` and applies to every Dockyard service; the short image names below also work with `DOCKYARD_IMAGE_PREFIX=dockyard`. `DOCKYARD_IMAGE_TAG` defaults to `local` for source builds; choose an available published tag when using prebuilt images:
 
 | Image                    | Compose service | Responsibility                                                                                          |
 | ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------- |

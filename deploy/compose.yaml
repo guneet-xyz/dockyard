@@ -2,7 +2,7 @@ name: dockyard
 
 services:
   init:
-    image: dockyard/init:${DOCKYARD_IMAGE_TAG:-local}
+    image: ${DOCKYARD_IMAGE_PREFIX:-cr.guneet.dev/dockyard}/init:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: missing
     volumes:
       - registry_certs:/certs
@@ -24,7 +24,7 @@ services:
     restart: unless-stopped
 
   migrate:
-    image: dockyard/migrate:${DOCKYARD_IMAGE_TAG:-local}
+    image: ${DOCKYARD_IMAGE_PREFIX:-cr.guneet.dev/dockyard}/migrate:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: missing
     depends_on:
       postgres:
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: dockyard/web:${DOCKYARD_IMAGE_TAG:-local}
+    image: ${DOCKYARD_IMAGE_PREFIX:-cr.guneet.dev/dockyard}/web:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: missing
     depends_on:
       postgres:
@@ -102,7 +102,7 @@ services:
     restart: unless-stopped
 
   ingress:
-    image: dockyard/ingress:${DOCKYARD_IMAGE_TAG:-local}
+    image: ${DOCKYARD_IMAGE_PREFIX:-cr.guneet.dev/dockyard}/ingress:${DOCKYARD_IMAGE_TAG:-local}
     pull_policy: missing
     environment:
       # This Compose deployment publishes HTTP only. Public HTTPS may terminate upstream.

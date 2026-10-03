@@ -14,6 +14,8 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
+Read [CI/CD and releases](releases.md) for GitHub Actions setup, registry secrets, conventional commits, multi-architecture image tags, and release recovery.
+
 Read [Automation keys](automation-keys.md) for project/image-scoped CI credentials, Docker login, expiry, revocation, and workflow examples.
 
 Read [Projects and images](projects.md) for the `project/image` naming policy, project visibility, and legacy repository compatibility.

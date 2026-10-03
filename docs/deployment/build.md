@@ -103,14 +103,14 @@ Refresh the repository browser to see the pushed image. Public pulls work withou
 
 ## Using prebuilt images
 
-Set `DOCKYARD_IMAGE_TAG` to a tag that exists for all four `dockyard/*` images in your local cache or image registry. The project currently has no automatic image-publishing workflow.
+CI publishes all four images under `cr.guneet.dev/dockyard/` for `linux/amd64` and `linux/arm64`. See [CI/CD and releases](../releases.md) for the release/tag policy. In `.env`, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an existing full released version (without the Git tag's `v` prefix), or `latest` to follow stable releases. Prefer a pinned full version in production, and wait for all four image-publication jobs to finish successfully.
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml pull
 docker compose --env-file .env -f deploy/compose.yaml up --wait --wait-timeout 240
 ```
 
-Do not include the build override in this mode. Do not assume the `local` tag is published remotely.
+Do not include the build override in this mode. `local` is never published remotely. If the images are private, sign in to `cr.guneet.dev` before pulling, using a pull-only automation key. For an existing local cache using unqualified `dockyard/*` names, set `DOCKYARD_IMAGE_PREFIX=dockyard`; the new default prefix is `cr.guneet.dev/dockyard`. Changing the image prefix does not change volume names or runtime URLs.
 
 ## Rebuild, upgrade, and stop
 

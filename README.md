@@ -11,6 +11,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 - Scoped automation keys for CI/CD, with project/image grants, expiry, and revocation.
 - One public endpoint for the UI and registry API, with streaming image transfers.
 - Separate `init`, `migrate`, `web`, and environment-configured `ingress` images.
+- Multi-architecture images at `cr.guneet.dev/dockyard/*` and conventional-commit releases.
 - Docker Compose deployment, persistent data, pnpm, and Prettier with `semi: false`.
 
 ## Choose a setup
@@ -48,7 +49,7 @@ docker tag alpine:latest localhost:3000/library/alpine:latest
 docker push localhost:3000/library/alpine:latest
 ```
 
-The base `deploy/compose.yaml` uses prebuilt images. Add `deploy/compose.build.yaml` to build the four Dockyard images locally; PostgreSQL and Distribution still use upstream images. Prebuilt tags must already exist in your local cache or an image registry—this repository does not publish images automatically.
+The base `deploy/compose.yaml` uses prebuilt images from `cr.guneet.dev/dockyard/*`. Set `DOCKYARD_IMAGE_TAG` to an available released version (or `latest`) and omit the build override to use them. Add `deploy/compose.build.yaml` to build the four Dockyard images locally; PostgreSQL and Distribution still use upstream images. The `local` tag is never published by CI. See [CI/CD and releases](docs/releases.md) for registry secrets, versioning, and image tags.
 
 ## Documentation
 
@@ -60,6 +61,7 @@ The detailed documentation lives in [`docs/`](docs/README.md):
 - [URL and TLS configuration](docs/configuration.md): what each URL/port variable controls and why incorrect TLS ownership causes redirect loops.
 - [Projects and images](docs/projects.md): namespaces, visibility, publishing, and compatibility with existing paths.
 - [Automation keys](docs/automation-keys.md): least-privilege registry credentials for CI/CD and unattended deployments.
+- [CI/CD and releases](docs/releases.md): publishing all four images, conventional-commit versions, and release recovery.
 - [Reference](docs/reference.md): ingress variables, authentication/RBAC, persistence, maintenance, local development, tests, and architecture.
 
 **Production:** use HTTPS before sending credentials over an untrusted network. **Persistence:** never run `docker compose down -v` unless you intend to delete the database, registry images, and signing keys.

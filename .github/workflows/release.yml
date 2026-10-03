@@ -1,0 +1,127 @@
+name: Release and publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing stable release to republish (e.g. v1.0.0); empty runs the normal release flow
+        type: string
+        required: false
+        default: ""
+      update_latest:
+        description: Also move latest and major/minor aliases when republishing an existing release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Do not cancel a publication halfway through the four-image release.
+concurrency:
+  group: dockyard-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.repository == 'guneet-xyz/dockyard' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      version: ${{ steps.source.outputs.version }}
+      edge: ${{ steps.source.outputs.edge }}
+      aliases: ${{ steps.source.outputs.aliases }}
+    steps:
+      - name: Maintain the conventional-commit release PR and create merged releases
+        if: inputs.release_tag == ''
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # GITHUB_TOKEN-created PRs do not trigger pull_request workflows. Explicit
+      # workflow_dispatch does trigger CI, without requiring a third/PAT secret.
+      - name: Dispatch quality checks for the generated release PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          branch=$(node -e 'const prs = JSON.parse(process.env.RELEASE_PRS); if (prs.length !== 1 || !prs[0].headBranchName) throw new Error("Expected one release PR"); console.log(prs[0].headBranchName)')
+          gh workflow run ci.yml --ref "$branch"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve the exact source commit and publication tags
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          SOURCE_SHA: ${{ github.sha }}
+          UPDATE_LATEST: ${{ inputs.update_latest }}
+        run: |
+          set -euo pipefail
+          tag=""
+          sha="$SOURCE_SHA"
+          aliases=false
+          edge=true
+          if [ -n "$REQUESTED_TAG" ]; then
+            tag="$REQUESTED_TAG"
+            edge=false
+            aliases="$UPDATE_LATEST"
+          elif [ "$RELEASE_CREATED" = true ]; then
+            tag="$RELEASE_TAG"
+            sha="$RELEASE_SHA"
+            aliases=true
+            # Release Please may find a merged release older than this push.
+            # Never label that older source as the current main development build.
+            if [ "$sha" != "$SOURCE_SHA" ]; then edge=false; fi
+          fi
+          version=""
+          if [ -n "$tag" ]; then
+            [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "Expected a stable vMAJOR.MINOR.PATCH release tag" >&2; exit 1; }
+            gh release view "$tag" --json tagName > /dev/null
+            tagged_sha=$(git rev-parse --verify "$tag^{commit}")
+            if [ -z "$REQUESTED_TAG" ] && [ "$tagged_sha" != "$sha" ]; then
+              echo "Release tag and Release Please source do not agree" >&2
+              exit 1
+            fi
+            sha="$tagged_sha"
+            git merge-base --is-ancestor "$sha" origin/main
+            version="${tag#v}"
+          fi
+          {
+            echo "sha=$sha"
+            echo "version=$version"
+            echo "edge=$edge"
+            echo "aliases=$aliases"
+          } >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+
+  publish:
+    needs: [prepare, checks]
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: ${{ needs.prepare.outputs.sha }}
+      version: ${{ needs.prepare.outputs.version }}
+      edge: ${{ needs.prepare.outputs.edge == 'true' }}
+      aliases: ${{ needs.prepare.outputs.aliases == 'true' }}
