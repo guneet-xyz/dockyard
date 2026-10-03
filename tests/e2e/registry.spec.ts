@@ -132,6 +132,33 @@ test("automation key secret is shown once and the key can be revoked", async ({ 
   await expect(page.getByRole("heading", { name: "Save your key secret" })).toBeVisible()
   await expect(page.getByLabel("Key secret", { exact: true })).toHaveAttribute("type", "password")
   await expect(page.getByLabel("Docker username", { exact: true })).toHaveValue(/^_key_/)
+  const secretDialog = page.getByRole("dialog", { name: "Save your key secret" })
+  await page.getByRole("button", { name: "Show key secret", exact: true }).click()
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expect
+      .poll(() =>
+        secretDialog.evaluate((element) => {
+          const dialog = element as HTMLElement
+          const bounds = dialog.getBoundingClientRect()
+          const style = getComputedStyle(dialog)
+          const left = bounds.left + parseFloat(style.paddingLeft)
+          const right = bounds.right - parseFloat(style.paddingRight)
+          return (
+            bounds.left >= 0 &&
+            bounds.right <= window.innerWidth + 1 &&
+            dialog.scrollWidth <= dialog.clientWidth + 1 &&
+            [...dialog.querySelectorAll("input, [data-slot='button']")].every((control) => {
+              const rectangle = control.getBoundingClientRect()
+              return rectangle.left >= left - 1 && rectangle.right <= right + 1
+            })
+          )
+        }),
+      )
+      .toBe(true)
+  }
+  await page.getByRole("button", { name: "Hide key secret", exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await page.getByRole("button", { name: "I saved the secret", exact: true }).click()
   await page.reload()
   await expect(page.getByRole("heading", { name: keyName, exact: true })).toBeVisible()

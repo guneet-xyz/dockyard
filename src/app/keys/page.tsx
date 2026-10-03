@@ -334,7 +334,7 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Save your key secret</DialogTitle>
             <DialogDescription>
@@ -343,39 +343,40 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
             </DialogDescription>
           </DialogHeader>
           {credentials && (
-            <div className="space-y-4">
-              <div className="space-y-2">
+            <div className="min-w-0 space-y-4">
+              <div className="min-w-0 space-y-2">
                 <Label htmlFor="key-username">Docker username</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Input
                     id="key-username"
                     value={credentials.username}
                     readOnly
-                    className="font-mono text-xs"
+                    className="min-w-0 flex-1 font-mono text-xs"
                   />
-                  <CopyButton value={credentials.username} />
+                  <CopyButton value={credentials.username} className="shrink-0" />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label htmlFor="key-secret">Key secret</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <Input
                     id="key-secret"
                     value={credentials.secret}
                     type={showSecret ? "text" : "password"}
                     readOnly
-                    className="font-mono text-xs"
+                    className="min-w-0 flex-1 font-mono text-xs"
                     autoComplete="off"
                   />
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="shrink-0"
                     onClick={() => setShowSecret(!showSecret)}
                     aria-label={showSecret ? "Hide key secret" : "Show key secret"}
                   >
                     {showSecret ? <EyeOff /> : <Eye />}
                   </Button>
-                  <CopyButton value={credentials.secret} />
+                  <CopyButton value={credentials.secret} className="shrink-0" />
                 </div>
               </div>
               <CommandBlock
