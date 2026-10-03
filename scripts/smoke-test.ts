@@ -12,6 +12,7 @@ const viewer = `viewer-${suffix}`
 const maintainer = `maintainer-${suffix}`
 const repo = `smoke-${suffix}/public`
 const privateRepo = `smoke-${suffix}/private`
+const protectedProject = `protected-${suffix}`
 const testPassword = `test-password-${suffix}`
 let assertions = 0
 
@@ -195,6 +196,143 @@ async function main() {
     201,
     "Reserve private repository",
   )
+  const projectList = await check(await browser("/api/projects"), 200, "Guest project list")
+  assert.ok(
+    projectList.projects.some(
+      (project: { name: string; imageCount: number }) =>
+        project.name === `smoke-${suffix}` && project.imageCount === 1,
+    ),
+  )
+  assertions++
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: "viewer-cannot-create", visibility: "public" },
+      viewerCookie,
+    ),
+    403,
+    "Viewer project creation blocked",
+  )
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: protectedProject, visibility: "private", description: "Private project test" },
+      maintainerCookie,
+    ),
+    201,
+    "Create private project",
+  )
+  await check(
+    await browser(`/api/projects/${protectedProject}`),
+    404,
+    "Private project hidden from guests",
+  )
+  await check(
+    await browser(`/api/projects/${protectedProject}`, "GET", undefined, viewerCookie),
+    200,
+    "Viewer can browse private project",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `${protectedProject}/init`, visibility: "public" },
+      maintainerCookie,
+    ),
+    400,
+    "Private projects cannot expose public child images",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `${protectedProject}/init`, visibility: "private" },
+      maintainerCookie,
+    ),
+    201,
+    "Reserve image under private project",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `smoke-${suffix}/nested/image`, visibility: "public" },
+      maintainerCookie,
+    ),
+    400,
+    "New API images require exactly project/image",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: `unscoped-${suffix}`, visibility: "public" },
+      maintainerCookie,
+    ),
+    400,
+    "New unscoped API images rejected",
+  )
+  const nestedToken = await token(`repository:smoke-${suffix}/nested/image:push`, maintainer)
+  await check(
+    await registryCall(`/v2/smoke-${suffix}/nested/image/blobs/uploads/`, nestedToken, "POST"),
+    401,
+    "New deeply nested Docker images cannot bypass naming policy",
+  )
+  const flatToken = await token(`repository:unscoped-${suffix}:push`, maintainer)
+  await check(
+    await registryCall(`/v2/unscoped-${suffix}/blobs/uploads/`, flatToken, "POST"),
+    401,
+    "New unscoped Docker images cannot bypass naming policy",
+  )
+  const protectedGuest = await token(`repository:${protectedProject}/new-image:pull`)
+  assert.deepEqual(
+    JSON.parse(Buffer.from(protectedGuest.split(".")[1], "base64url").toString()).access[0].actions,
+    [],
+  )
+  assertions++
+  await check(
+    await browser(
+      `/api/projects/smoke-${suffix}`,
+      "PATCH",
+      { description: "Updated project", visibility: "private" },
+      viewerCookie,
+    ),
+    403,
+    "Viewer project settings blocked",
+  )
+  await check(
+    await browser(
+      `/api/projects/smoke-${suffix}`,
+      "PATCH",
+      { description: "Updated project", visibility: "private" },
+      maintainerCookie,
+    ),
+    200,
+    "Maintainer can make an existing project private",
+  )
+  await check(
+    await browser(`/api/repositories/${repo}`),
+    404,
+    "Project privacy hides previously public images",
+  )
+  const hidden = await token(`repository:${repo}:pull`)
+  assert.deepEqual(
+    JSON.parse(Buffer.from(hidden.split(".")[1], "base64url").toString()).access[0].actions,
+    [],
+  )
+  assertions++
+  await check(
+    await browser(
+      `/api/projects/smoke-${suffix}`,
+      "PATCH",
+      { description: "Updated project", visibility: "public" },
+      maintainerCookie,
+    ),
+    200,
+    "Project can be reopened without rewriting image paths",
+  )
   const guestList = await check(await browser("/api/repositories"), 200, "Guest catalog")
   assert.ok(guestList.repositories.some((item: { name: string }) => item.name === repo))
   assert.ok(!guestList.repositories.some((item: { name: string }) => item.name === privateRepo))
@@ -340,6 +478,31 @@ async function main() {
     await registryCall(`/v2/${privateRepo}/manifests/latest`, privatePull),
     200,
     "Viewer pulls a private image through ingress",
+  )
+  const protectedPush = await token(`repository:${protectedProject}/web:pull,push`, maintainer)
+  await uploadBlob(`${protectedProject}/web`, protectedPush, config)
+  await check(
+    await registryCall(
+      `/v2/${protectedProject}/web/manifests/latest`,
+      protectedPush,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "CLI push inherits an existing private project",
+  )
+  const protectedRead = await token(`repository:${protectedProject}/web:pull`, viewer)
+  await check(
+    await registryCall(`/v2/${protectedProject}/web/manifests/latest`, protectedRead),
+    200,
+    "Authenticated viewer reads a project-private CLI image",
+  )
+  const noProtectedRead = await token(`repository:${protectedProject}/web:pull`)
+  await check(
+    await registryCall(`/v2/${protectedProject}/web/manifests/latest`, noProtectedRead),
+    401,
+    "Guest cannot pull a newly pushed project-private image",
   )
   const detail = await check(
     await browser(`/api/repositories/${repo}`),

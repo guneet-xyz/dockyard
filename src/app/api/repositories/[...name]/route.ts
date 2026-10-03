@@ -66,6 +66,9 @@ export async function PATCH(request: Request, context: Context) {
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))
+    const current = await readableRepository(name, user)
+    if (current.projectVisibility === "private" && input.visibility === "public")
+      throw new HttpError(400, "Images in a private project must be private.")
     await db()
       .insert(repositories)
       .values({ name, ...input })

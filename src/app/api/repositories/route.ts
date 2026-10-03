@@ -3,9 +3,11 @@ import { z } from "zod"
 import { audit, currentUser, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { db } from "@/lib/db"
-import { repositories } from "@/lib/db/schema"
+import { projects, repositories } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
-import { canWrite, validRepositoryName } from "@/lib/permissions"
+import { canWrite } from "@/lib/permissions"
+import { repositoryIdentity, validImageRepository } from "@/lib/image-names"
 import { listRepositories } from "@/lib/registry"
 
 export const dynamic = "force-dynamic"
@@ -37,16 +39,30 @@ export async function POST(request: Request) {
       .object({
         name: z
           .string()
-          .refine(validRepositoryName, "Use a lowercase Docker repository name, e.g. team/api."),
+          .refine(
+            validImageRepository,
+            "Use exactly project/image, e.g. dockyard/init. Nested or unscoped names are not allowed for new images.",
+          ),
         description: z.string().trim().max(500).default(""),
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))
-    const [created] = await db()
-      .insert(repositories)
-      .values(input)
-      .onConflictDoNothing()
-      .returning()
+    const projectName = repositoryIdentity(input.name).projectName!
+    const created = await db().transaction(async (tx) => {
+      await tx
+        .insert(projects)
+        .values({ name: projectName, visibility: config.defaultVisibility })
+        .onConflictDoNothing()
+      const [project] = await tx
+        .select()
+        .from(projects)
+        .where(eq(projects.name, projectName))
+        .limit(1)
+      if (project.visibility === "private" && input.visibility === "public")
+        throw new HttpError(400, "Images in a private project must be private.")
+      const [image] = await tx.insert(repositories).values(input).onConflictDoNothing().returning()
+      return image
+    })
     if (!created)
       throw new HttpError(
         409,

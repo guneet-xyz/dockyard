@@ -5,6 +5,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 ## Features
 
 - Searchable repositories and image tags, platform/digest details, and copyable Docker commands.
+- Projects with images under exactly `project/image`, such as `dockyard/init` and `dockyard/web`.
 - Public guest pulls and authenticated access to private repositories.
 - Viewer, maintainer, and admin roles; user management and audit history.
 - One public endpoint for the UI and registry API, with streaming image transfers.
@@ -56,6 +57,7 @@ The detailed documentation lives in [`docs/`](docs/README.md):
 - [Two-proxy setup](docs/deployment/two-proxies.md): HTTPS at an external proxy, HTTP behind it, and host/container networking.
 - [Own proxy without ingress](docs/deployment/custom-proxy.md): disabling ingress, backend access, Caddy/Nginx routing, and auth checks.
 - [URL and TLS configuration](docs/configuration.md): what each URL/port variable controls and why incorrect TLS ownership causes redirect loops.
+- [Projects and images](docs/projects.md): namespaces, visibility, publishing, and compatibility with existing paths.
 - [Reference](docs/reference.md): ingress variables, authentication/RBAC, persistence, maintenance, local development, tests, and architecture.
 
 **Production:** use HTTPS before sending credentials over an untrusted network. **Persistence:** never run `docker compose down -v` unless you intend to delete the database, registry images, and signing keys.

@@ -22,16 +22,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { CommandBlock, ErrorState, TableSkeleton } from "@/components/shared"
 import { EmptyRepositories, RepositoryTable } from "@/components/repository-table"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
+import { NewProjectDialog } from "@/components/new-project-dialog"
+import { useProjects } from "@/hooks/use-projects"
 
 export default function OverviewPage() {
   const registry = useRepositories()
+  const projects = useProjects()
   const { data: session } = useSession()
   const repos = registry.data?.repositories ?? []
   const host = registry.data?.registryHost ?? session?.registryHost ?? "localhost:3000"
   const guest = !session?.user
   const stats = [
     {
-      label: "Repositories",
+      label: "Images",
       value: repos.length,
       icon: Box,
       color: "text-primary",
@@ -45,14 +48,14 @@ export default function OverviewPage() {
       note: "Versions ready to deploy",
     },
     {
-      label: "Public repositories",
+      label: "Public images",
       value: repos.filter((repo) => repo.visibility === "public").length,
       icon: Globe2,
       color: "text-amber-300",
       note: "Available to everyone",
     },
     {
-      label: "Private repositories",
+      label: "Private images",
       value: guest ? "—" : repos.filter((repo) => repo.visibility === "private").length,
       icon: Lock,
       color: "text-violet-400",
@@ -75,16 +78,27 @@ export default function OverviewPage() {
           </p>
         </div>
         {registry.data?.canWrite ? (
-          <NewRepositoryDialog defaultVisibility={registry.data.defaultVisibility} />
+          <div className="flex gap-2">
+            <NewProjectDialog defaultVisibility={registry.data.defaultVisibility} />
+            <NewRepositoryDialog defaultVisibility={registry.data.defaultVisibility} />
+          </div>
         ) : (
           <Button asChild variant="outline">
-            <Link href="/repositories">
-              Browse repositories
+            <Link href="/projects">
+              Browse projects
               <ArrowUpRight />
             </Link>
           </Button>
         )}
       </div>
+      {projects.isSuccess && (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <Link href="/projects" className="font-medium text-primary hover:underline">
+            {projects.data.projects.length} projects
+          </Link>
+          <span>Group images as project/image, such as dockyard/init.</span>
+        </div>
+      )}
       {guest && (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/15 bg-primary/[0.035] px-4 py-3">
           <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
@@ -172,8 +186,10 @@ export default function OverviewPage() {
               </div>
               <div className="mt-5 space-y-2">
                 <CommandBlock command={`docker login ${host}`} />
-                <CommandBlock command={`docker tag my-app:latest ${host}/my-app:latest`} />
-                <CommandBlock command={`docker push ${host}/my-app:latest`} />
+                <CommandBlock
+                  command={`docker tag my-app:latest ${host}/my-project/my-app:latest`}
+                />
+                <CommandBlock command={`docker push ${host}/my-project/my-app:latest`} />
               </div>
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">

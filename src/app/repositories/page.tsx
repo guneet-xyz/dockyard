@@ -17,6 +17,7 @@ import { EmptyRepositories, RepositoryTable } from "@/components/repository-tabl
 import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { cn } from "@/lib/utils"
+import { imageHref } from "@/lib/image-names"
 
 export default function RepositoriesPage() {
   const query = useRepositories()
@@ -37,7 +38,7 @@ export default function RepositoriesPage() {
     <div className="page-enter space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Repositories</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Explore your images and find exactly what you need to ship.
           </p>
@@ -50,9 +51,9 @@ export default function RepositoriesPage() {
         <div className="relative min-w-48 flex-1">
           <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
-            aria-label="Search repositories"
+            aria-label="Search images"
             className="pl-9 pr-9"
-            placeholder="Search repositories…"
+            placeholder="Search images…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -77,7 +78,7 @@ export default function RepositoriesPage() {
           </SelectContent>
         </Select>
         <Select value={sort} onValueChange={setSort}>
-          <SelectTrigger aria-label="Sort repositories" className="w-36">
+          <SelectTrigger aria-label="Sort images" className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -117,7 +118,7 @@ export default function RepositoriesPage() {
           variant="outline"
           size="icon"
           onClick={() => query.refetch()}
-          aria-label="Refresh repositories"
+          aria-label="Refresh images"
           disabled={query.isFetching}
         >
           <RefreshCw className={query.isFetching ? "animate-spin" : ""} />
@@ -126,8 +127,8 @@ export default function RepositoriesPage() {
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
           {query.isPending
-            ? "Loading repositories…"
-            : `${filtered.length} ${filtered.length === 1 ? "repository" : "repositories"}${search || visibility !== "all" ? ` of ${all.length}` : ""}`}
+            ? "Loading images…"
+            : `${filtered.length} ${filtered.length === 1 ? "image" : "images"}${search || visibility !== "all" ? ` of ${all.length}` : ""}`}
         </span>
         <span className="hidden sm:inline">Synced with your registry · refreshes every minute</span>
       </div>
@@ -148,7 +149,7 @@ export default function RepositoriesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((repo) => (
-            <Link key={repo.name} href={`/repositories/${repo.name}`} className="group">
+            <Link key={repo.name} href={imageHref(repo.name)} className="group">
               <Card className="h-full p-5 transition-colors hover:border-primary/40">
                 <div className="mb-5 flex items-center justify-between">
                   <div className="flex size-10 items-center justify-center rounded-lg border bg-muted">

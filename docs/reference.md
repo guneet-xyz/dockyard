@@ -171,9 +171,9 @@ Docker treats localhost as a development exception. For a non-local HTTP registr
 | Create/configure repositories       |   —   |   —    |     ✓      |   ✓   |
 | Manage users and read audit history |   —   |   —    |     —      |   ✓   |
 
-Roles are registry-wide. “Private” means **all active authenticated users**, not per-user or per-team ACLs. Guest catalog results filter out private names; raw Docker catalog access is admin-only. The UI uses a server-only service token to fetch and filter registry data.
+Roles are registry-wide. “Private” means **all active authenticated users**, not per-user or per-team ACLs. A private project makes every image under its namespace private, including images otherwise marked public. Guest catalog/project results filter out private names and counts; raw Docker catalog access is admin-only. The UI uses a server-only service token to fetch and filter registry data. See [Projects and images](projects.md) for exactly `project/image` naming and legacy-path compatibility.
 
-New, unconfigured repositories are public by default. For a private image, create the repository as private in the UI **before the first push**. Set `DEFAULT_REPOSITORY_VISIBILITY=private` to make unconfigured names private instead. The UI remains accessible to guests, but they only see explicitly public repositories.
+New, unconfigured projects are public by default. For a private namespace, create the project as private in the UI **before the first push**; images inherit that default. Public projects can also contain individually private images. Set `DEFAULT_REPOSITORY_VISIBILITY=private` to make unconfigured namespaces private instead. New image paths require exactly `project/image`, while existing deeper/unscoped names remain accessible. The UI remains accessible to guests, but they only see public projects and images.
 
 Disabling an account, changing its role, or resetting its password revokes its web sessions. Issued registry tokens last 5 minutes, so existing Docker authorization can remain valid until expiry. Changing visibility has the same token-expiry delay. Previously downloaded images cannot be revoked.
 

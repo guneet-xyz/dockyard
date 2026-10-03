@@ -10,11 +10,30 @@ export type UserInfo = SessionUser & { createdAt: string }
 export type Visibility = "public" | "private"
 export type Repository = {
   name: string
+  projectName: string | null
+  imageName: string
+  legacy: boolean
+  projectVisibility: Visibility | null
   tagCount: number
   tags: string[]
   visibility: Visibility
   description: string
   updatedAt: string | null
+}
+export type Project = {
+  name: string
+  description: string
+  visibility: Visibility
+  imageCount: number
+  tagCount: number
+  updatedAt: string | null
+}
+export type ProjectOverview = {
+  projects: Project[]
+  ungroupedCount: number
+  registryHost: string
+  defaultVisibility: Visibility
+  canWrite: boolean
 }
 export type ImageTag = {
   name: string

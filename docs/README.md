@@ -14,6 +14,8 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
+Read [Projects and images](projects.md) for the `project/image` naming policy, project visibility, and legacy repository compatibility.
+
 Read [URL, TLS, and port configuration](configuration.md) for the logic behind `APP_URL`, `INGRESS_PUBLIC_URL`, upstream URLs, network bindings, and redirect-loop diagnosis.
 
 See [the reference guide](reference.md) for:

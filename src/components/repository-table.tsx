@@ -2,17 +2,24 @@
 import Link from "next/link"
 import { ArrowUpRight, Box, ChevronRight, PackageOpen, Tag } from "lucide-react"
 import type { Repository } from "@/lib/types"
+import { imageHref } from "@/lib/image-names"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { VisibilityBadge } from "./shared"
 
-export function RepositoryTable({ repositories }: { repositories: Repository[] }) {
+export function RepositoryTable({
+  repositories,
+  withinProject = false,
+}: {
+  repositories: Repository[]
+  withinProject?: boolean
+}) {
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Repository</TableHead>
+          <TableHead>Image</TableHead>
           <TableHead>Visibility</TableHead>
           <TableHead>Tags</TableHead>
           <TableHead>Latest tag</TableHead>
@@ -25,16 +32,18 @@ export function RepositoryTable({ repositories }: { repositories: Repository[] }
         {repositories.map((repo) => (
           <TableRow key={repo.name}>
             <TableCell>
-              <Link
-                href={`/repositories/${repo.name}`}
-                className="group flex min-w-44 items-center gap-3"
-              >
+              <Link href={imageHref(repo.name)} className="group flex min-w-44 items-center gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground transition-colors group-hover:border-primary/25 group-hover:text-primary">
                   <Box className="size-[18px]" />
                 </div>
                 <div>
                   <p className="font-medium transition-colors group-hover:text-primary">
-                    {repo.name}
+                    {withinProject ? repo.imageName : repo.name}
+                    {repo.legacy && (
+                      <Badge variant="secondary" className="ml-2">
+                        Legacy path
+                      </Badge>
+                    )}
                   </p>
                   <p className="mt-1 max-w-64 truncate text-[11px] text-muted-foreground">
                     {repo.description ||
@@ -67,7 +76,7 @@ export function RepositoryTable({ repositories }: { repositories: Repository[] }
             </TableCell>
             <TableCell>
               <Button asChild variant="ghost" size="icon" className="size-7 text-muted-foreground">
-                <Link href={`/repositories/${repo.name}`} aria-label={`Open ${repo.name}`}>
+                <Link href={imageHref(repo.name)} aria-label={`Open ${repo.name}`}>
                   <ChevronRight className="size-4" />
                 </Link>
               </Button>
@@ -87,7 +96,7 @@ export function EmptyRepositories({ filtered = false }: { filtered?: boolean }) 
         <div className="absolute -right-1 -top-1 size-3 rounded-full border-4 border-card bg-primary" />
       </div>
       <h3 className="text-base font-medium">
-        {filtered ? "No matching repositories" : "Your next great build starts here"}
+        {filtered ? "No matching images" : "Your next great build starts here"}
       </h3>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
         {filtered

@@ -3,7 +3,8 @@ import { checkCredentials } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { apiError, HttpError } from "@/lib/http"
 import { allowedActions, validRepositoryName } from "@/lib/permissions"
-import { repositoryMetadata } from "@/lib/registry"
+import { repositoryExists, repositoryMetadata } from "@/lib/registry"
+import { validImageRepository } from "@/lib/image-names"
 import { type RegistryAccess, signRegistryToken } from "@/lib/registry-token"
 import type { SessionUser } from "@/lib/types"
 
@@ -35,11 +36,20 @@ export async function GET(request: Request) {
       const [type, name, rawActions, extra] = scope.split(":")
       if (!name || !rawActions || extra) throw new HttpError(400, "Invalid scope.")
       if (type === "repository" && validRepositoryName(name)) {
-        const { visibility } = await repositoryMetadata(name)
+        const metadata = await repositoryMetadata(name)
+        let actions = allowedActions(user?.role ?? null, metadata.visibility, rawActions.split(","))
+        if (
+          actions.includes("push") &&
+          !validImageRepository(name) &&
+          !metadata.configured &&
+          !(await repositoryExists(name))
+        ) {
+          actions = actions.filter((action) => action !== "push" && action !== "delete")
+        }
         access.push({
           type,
           name,
-          actions: allowedActions(user?.role ?? null, visibility, rawActions.split(",")),
+          actions,
         })
       } else if (type === "registry" && name === "catalog") {
         access.push({

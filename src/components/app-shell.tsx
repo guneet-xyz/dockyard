@@ -13,6 +13,7 @@ import {
   CircleHelp,
   Command,
   ExternalLink,
+  FolderOpen,
   LayoutDashboard,
   LogIn,
   LogOut,
@@ -39,7 +40,8 @@ import {
 
 const navigation = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
-  { label: "Repositories", href: "/repositories", icon: Box },
+  { label: "Projects", href: "/projects", icon: FolderOpen },
+  { label: "Images", href: "/repositories", icon: Box },
   { label: "Quick start", href: "/guide", icon: Terminal },
 ]
 
@@ -161,12 +163,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === "/"
       ? "Overview"
       : pathname.startsWith("/repositories")
-        ? "Repositories"
-        : pathname === "/users"
-          ? "Access control"
-          : pathname === "/activity"
-            ? "Activity log"
-            : "Quick start"
+        ? "Images"
+        : pathname.startsWith("/projects")
+          ? "Projects"
+          : pathname === "/users"
+            ? "Access control"
+            : pathname === "/activity"
+              ? "Activity log"
+              : "Quick start"
   if (pathname === "/login") return <>{children}</>
   async function logout() {
     try {

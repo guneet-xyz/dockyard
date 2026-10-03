@@ -34,12 +34,12 @@ export default function GuidePage() {
     {
       title: "Give it a registry address",
       description: "Tag your local image with your registry hostname and repository name.",
-      command: `docker tag my-app:latest ${host}/my-app:latest`,
+      command: `docker tag my-app:latest ${host}/my-project/my-app:latest`,
     },
     {
       title: "Push it to Dockyard",
       description: "Your image and tags will appear in the repository browser automatically.",
-      command: `docker push ${host}/my-app:latest`,
+      command: `docker push ${host}/my-project/my-app:latest`,
     },
   ]
   return (
@@ -98,7 +98,7 @@ export default function GuidePage() {
           <p className="mb-4 text-sm text-muted-foreground">
             No account needed. Guests can browse and pull any public repository.
           </p>
-          <CommandBlock command={`docker pull ${host}/my-app:latest`} />
+          <CommandBlock command={`docker pull ${host}/my-project/my-app:latest`} />
           <p className="mt-3 text-xs text-muted-foreground">
             For a private image, run <code>docker login</code> first.
           </p>

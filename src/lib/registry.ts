@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm"
 import { db } from "./db"
-import { repositories } from "./db/schema"
+import { projects, repositories } from "./db/schema"
 import { config } from "./config"
 import { HttpError } from "./http"
 import { canRead, validRepositoryName } from "./permissions"
 import { signRegistryToken } from "./registry-token"
+import { effectiveVisibility, repositoryIdentity } from "./image-names"
 import type { ImageTag, Repository, SessionUser } from "./types"
 
 const acceptedManifests = [
@@ -85,16 +86,45 @@ async function paginatedList(
 
 export async function repositoryMetadata(name: string) {
   repositoryPath(name)
-  const [metadata] = await db()
-    .select()
-    .from(repositories)
-    .where(eq(repositories.name, name))
-    .limit(1)
+  const identity = repositoryIdentity(name)
+  const [metadata, project] = await Promise.all([
+    db()
+      .select()
+      .from(repositories)
+      .where(eq(repositories.name, name))
+      .limit(1)
+      .then((rows) => rows[0]),
+    identity.projectName
+      ? db()
+          .select()
+          .from(projects)
+          .where(eq(projects.name, identity.projectName))
+          .limit(1)
+          .then((rows) => rows[0])
+      : Promise.resolve(undefined),
+  ])
   return {
     name,
-    visibility: metadata?.visibility ?? config.defaultVisibility,
+    ...identity,
+    configured: Boolean(metadata),
+    projectVisibility: project?.visibility ?? null,
+    visibility: effectiveVisibility(
+      metadata?.visibility,
+      project?.visibility,
+      config.defaultVisibility,
+    ),
     description: metadata?.description ?? "",
     updatedAt: metadata?.updatedAt?.toISOString() ?? null,
+  }
+}
+
+export async function repositoryExists(name: string) {
+  try {
+    await registryRequest(`/v2/${repositoryPath(name)}/tags/list?n=1`, name)
+    return true
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return false
+    throw error
   }
 }
 
@@ -122,26 +152,45 @@ export async function listTags(name: string) {
 }
 
 export async function listRepositories(user: SessionUser | null): Promise<Repository[]> {
-  const [names, metadata] = await Promise.all([
+  const [names, metadata, projectRows] = await Promise.all([
     paginatedList("/v2/_catalog", "repositories"),
     db().select().from(repositories),
+    db().select().from(projects),
   ])
   const byName = new Map(metadata.map((repo) => [repo.name, repo]))
+  const byProject = new Map(projectRows.map((project) => [project.name, project]))
   const visible = [...new Set([...names, ...metadata.map((repo) => repo.name)])]
     .sort()
-    .filter((name) => canRead(user, byName.get(name)?.visibility ?? config.defaultVisibility))
+    .filter((name) =>
+      canRead(
+        user,
+        effectiveVisibility(
+          byName.get(name)?.visibility,
+          byProject.get(repositoryIdentity(name).projectName ?? "")?.visibility,
+          config.defaultVisibility,
+        ),
+      ),
+    )
   const results: Repository[] = []
   // Bounded concurrency prevents a large catalog from exhausting the registry.
   for (let i = 0; i < visible.length; i += 8) {
     const batch = await Promise.all(
       visible.slice(i, i + 8).map(async (name) => {
         const meta = byName.get(name)
+        const identity = repositoryIdentity(name)
+        const project = byProject.get(identity.projectName ?? "")
         const tags = await listTags(name)
         return {
           name,
+          ...identity,
+          projectVisibility: project?.visibility ?? null,
           tags,
           tagCount: tags.length,
-          visibility: meta?.visibility ?? config.defaultVisibility,
+          visibility: effectiveVisibility(
+            meta?.visibility,
+            project?.visibility,
+            config.defaultVisibility,
+          ),
           description: meta?.description ?? "",
           updatedAt: meta?.updatedAt?.toISOString() ?? null,
         }

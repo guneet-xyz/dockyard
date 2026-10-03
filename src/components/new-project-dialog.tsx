@@ -2,10 +2,9 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { ArrowRight, Loader2, Plus } from "lucide-react"
+import { FolderPlus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
-import { imageHref } from "@/lib/image-names"
 import type { Visibility } from "@/lib/types"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -21,40 +20,28 @@ import {
 } from "./ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 
-export function NewRepositoryDialog({
+export function NewProjectDialog({
   defaultVisibility = "public",
-  projectName,
-  projectVisibility,
 }: {
   defaultVisibility?: Visibility
-  projectName?: string
-  projectVisibility?: Visibility
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [visibility, setVisibility] = useState<Visibility>(
-    projectVisibility === "private" ? "private" : defaultVisibility,
-  )
+  const [visibility, setVisibility] = useState<Visibility>(defaultVisibility)
   const router = useRouter()
   const client = useQueryClient()
-  const mutation = useMutation({
+  const create = useMutation({
     mutationFn: () =>
-      api("/api/repositories", {
+      api("/api/projects", {
         method: "POST",
-        body: JSON.stringify({
-          name: projectName ? `${projectName}/${name}` : name,
-          description,
-          visibility,
-        }),
+        body: JSON.stringify({ name, description, visibility }),
       }),
     onSuccess: () => {
-      client.invalidateQueries({ queryKey: ["repositories"] })
       client.invalidateQueries({ queryKey: ["projects"] })
-      client.invalidateQueries({ queryKey: ["project"] })
       setOpen(false)
-      toast.success("Image created. Ready for your first push.")
-      router.push(imageHref(projectName ? `${projectName}/${name}` : name))
+      toast.success("Project created. Add your first image.")
+      router.push(`/projects/${name}`)
     },
     onError: (error) => toast.error(error.message),
   })
@@ -62,65 +49,62 @@ export function NewRepositoryDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
-          <Plus />
-          New image
+          <FolderPlus />
+          New project
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create an image</DialogTitle>
+          <DialogTitle>Create a project</DialogTitle>
           <DialogDescription>
-            Reserve a name and set its visibility before pushing your first image.
+            A namespace for related images, such as dockyard/init and dockyard/web.
           </DialogDescription>
         </DialogHeader>
         <form
+          className="space-y-5"
           onSubmit={(event) => {
             event.preventDefault()
-            mutation.mutate()
+            create.mutate()
           }}
-          className="space-y-5"
         >
           <div className="space-y-2">
-            <Label htmlFor="repository-name">{projectName ? "Image name" : "Image path"}</Label>
+            <Label htmlFor="new-project-name">Project name</Label>
             <Input
-              id="repository-name"
-              placeholder={projectName ? "init" : "dockyard/init"}
+              id="new-project-name"
+              placeholder="dockyard"
+              required
+              maxLength={253}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              required
-              maxLength={projectName ? 254 - projectName.length : 255}
             />
             <p className="text-xs text-muted-foreground">
-              {projectName
-                ? `Stored as ${projectName}/${name || "image"}. Image names cannot contain slashes.`
-                : "Use exactly project/image. An unconfigured project is created with the registry’s default visibility."}
+              One lowercase name. No slashes, registry hostname, or tag.
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="repository-description">
-              Description <span className="text-muted-foreground">(optional)</span>
-            </Label>
+            <Label htmlFor="new-project-description">Description</Label>
             <Input
-              id="repository-description"
-              placeholder="What’s inside this image?"
+              id="new-project-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
+              placeholder="What does this project contain?"
               maxLength={500}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="repository-visibility">Visibility</Label>
+            <Label htmlFor="new-project-visibility">Visibility</Label>
             <Select
               value={visibility}
-              disabled={projectVisibility === "private"}
               onValueChange={(value) => setVisibility(value as Visibility)}
             >
-              <SelectTrigger id="repository-visibility">
+              <SelectTrigger id="new-project-visibility">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="public">Public — anyone can browse and pull</SelectItem>
-                <SelectItem value="private">Private — signed-in users only</SelectItem>
+                <SelectItem value="public">
+                  Public — public images can be browsed by guests
+                </SelectItem>
+                <SelectItem value="private">Private — all images require sign-in</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -128,9 +112,9 @@ export function NewRepositoryDialog({
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={mutation.isPending || !name}>
-              {mutation.isPending ? <Loader2 className="animate-spin" /> : <ArrowRight />}Create
-              image
+            <Button type="submit" disabled={create.isPending || !name}>
+              {create.isPending ? <Loader2 className="animate-spin" /> : <FolderPlus />}Create
+              project
             </Button>
           </DialogFooter>
         </form>

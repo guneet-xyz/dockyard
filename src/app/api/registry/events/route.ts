@@ -2,7 +2,9 @@ import { timingSafeEqual } from "node:crypto"
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { auditEvents, repositories } from "@/lib/db/schema"
+import { auditEvents, projects, repositories } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { repositoryIdentity } from "@/lib/image-names"
 import { config } from "@/lib/config"
 import { apiError, HttpError } from "@/lib/http"
 import { validRepositoryName } from "@/lib/permissions"
@@ -62,11 +64,22 @@ export async function POST(request: Request) {
           .onConflictDoNothing()
           .returning({ id: auditEvents.id })
         if (!inserted.length) return
+        const { projectName } = repositoryIdentity(name)
+        let visibility = config.defaultVisibility
+        if (projectName) {
+          await tx.insert(projects).values({ name: projectName, visibility }).onConflictDoNothing()
+          const [project] = await tx
+            .select()
+            .from(projects)
+            .where(eq(projects.name, projectName))
+            .limit(1)
+          visibility = project.visibility
+        }
         await tx
           .insert(repositories)
           .values({
             name,
-            visibility: config.defaultVisibility,
+            visibility,
             updatedAt: new Date(event.timestamp),
           })
           .onConflictDoUpdate({

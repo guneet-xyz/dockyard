@@ -38,6 +38,15 @@ export const sessions = pgTable(
   ],
 )
 
+export const projects = pgTable("projects", {
+  name: text("name").primaryKey(),
+  description: text("description").notNull().default(""),
+  visibility: visibilityEnum("visibility").notNull().default("public"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+})
+
+// Distribution stores images as repository names; project membership is their first path segment.
 export const repositories = pgTable("repositories", {
   name: text("name").primaryKey(),
   visibility: visibilityEnum("visibility").notNull().default("public"),
