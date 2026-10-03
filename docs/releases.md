@@ -26,6 +26,8 @@ Every published tag is a multi-architecture image index containing **`linux/amd6
 
 The registry must be reachable from GitHub-hosted runners over HTTPS with a publicly trusted certificate. Keep its existing Dockyard Basic-to-bearer authentication and forward `Authorization` through its proxy unchanged. This pipeline uses ordinary `docker/login-action` credentials, not browser sessions, proxy bypass credentials, or an internal service token. Secrets are used for registry login only, never as Docker build arguments, image labels, or committed files. Rotate the key from Dockyard and update `DOCKER_PASSWORD` when needed; the username stays unchanged.
 
+Before building, each publication job requests a scoped token and checks that the registry grants both `pull` and `push` for its exact `dockyard/<image>` path. This check uploads nothing and never prints credentials or bearer tokens. Successful Docker login alone does not prove write access. If preflight reports insufficient permissions, create a replacement key with a `dockyard` project **pull + push** grant owned by an enabled maintainer/admin, then update both secrets in the `release` environment and retry. Changing the workflow cannot expand a key's grants or its owner's role.
+
 ## Automatic versions from conventional commits
 
 Release Please maintains one release PR for the whole application, updating `package.json`, `.release-please-manifest.json`, and `CHANGELOG.md`. There are no independent component versions or npm publication. Generated `CHANGELOG.md` and `.release-please-manifest.json` are excluded from Prettier so their generated formatting does not fail CI; the manifest is still parsed and checked against the package version in unit tests.

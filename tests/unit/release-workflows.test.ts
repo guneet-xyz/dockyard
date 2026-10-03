@@ -189,6 +189,78 @@ describe("publication preflight and early-failure cleanup", () => {
   })
 })
 
+describe("read-only registry permission preflight", () => {
+  const run = publisher.steps!.find(
+    (step) => step.name === "Verify scoped registry permissions",
+  )!.run!
+  const script = run.slice(run.indexOf("const registry"), run.lastIndexOf("\nNODE"))
+  function checkAccess({
+    actions = ["pull", "push"],
+    realm = "https://cr.guneet.dev/api/registry/token",
+    status = 200,
+    target = "init",
+    repository = `dockyard/${target}`,
+  }: {
+    actions?: string[]
+    realm?: string
+    status?: number
+    target?: string
+    repository?: string
+  } = {}) {
+    const fixture = JSON.stringify({ actions, realm, status, repository, target })
+    const mocked = `
+      const fixture = ${fixture}
+      let calls = 0
+      globalThis.fetch = async (url, options) => {
+        url = new URL(url)
+        if (++calls === 1) return new Response(null, { status: 401, headers: { "www-authenticate": 'Bearer realm="' + fixture.realm + '",service="dockyard-registry"' } })
+        if (url.origin !== "https://cr.guneet.dev") throw new Error("Credential escaped the registry origin")
+        if (url.searchParams.get("scope") !== "repository:dockyard/" + fixture.target + ":pull,push") throw new Error("Wrong requested scope")
+        if (options.headers.Authorization !== "Basic " + Buffer.from("test-user:test-secret").toString("base64")) throw new Error("Wrong credential")
+        const claims = { access: [{ type: "repository", name: fixture.repository, actions: fixture.actions }] }
+        const token = "header." + Buffer.from(JSON.stringify(claims)).toString("base64url") + ".signature"
+        return new Response(JSON.stringify({ token }), { status: fixture.status })
+      }
+    `
+    return execute(process.execPath, ["--input-type=module", "-e", `${mocked}\n${script}`], {
+      env: {
+        ...process.env,
+        DOCKER_USERNAME: "test-user",
+        DOCKER_PASSWORD: "test-secret",
+        TARGET: target,
+      },
+    })
+  }
+  it.each(["init", "migrate", "web", "ingress"])(
+    "accepts exact pull + push authorization for dockyard/%s",
+    async (target) => {
+      await expect(checkAccess({ target })).resolves.toMatchObject({
+        stdout: `Verified pull + push permission for dockyard/${target}\n`,
+      })
+    },
+  )
+  it("rejects valid pull-only credentials and unrelated resource grants before building", async () => {
+    await expect(checkAccess({ actions: ["pull"] })).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("granted: pull"),
+    })
+    await expect(checkAccess({ repository: "other/init" })).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("granted: none"),
+    })
+  })
+  it("rejects invalid credentials and refuses to send them to another origin", async () => {
+    await expect(checkAccess({ status: 401 })).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("Registry token request failed (401)"),
+    })
+    await expect(checkAccess({ realm: "https://evil.example/token" })).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("Refusing to forward credentials"),
+    })
+  })
+})
+
 async function resolve(env: Record<string, string> = {}) {
   const folder = await mkdtemp(
     join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "dockyard-release-test-"),
