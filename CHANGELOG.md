@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/guneet-xyz/dockyard/compare/v0.1.0...v0.2.0) (2026-10-04)
+
+
+### Features
+
+* delete image repositories and projects with typed confirmation ([02831c6](https://github.com/guneet-xyz/dockyard/commit/02831c6b261e5607a2235f5e6817a28749d2fec0))
+
+
+### Bug Fixes
+
+* **ci:** bind publishing credentials directly to release environment ([d830468](https://github.com/guneet-xyz/dockyard/commit/d8304687983385a061174682638ab4ee40386c15))
+* **ci:** declare release environment credentials in reusable publisher ([c2fe59c](https://github.com/guneet-xyz/dockyard/commit/c2fe59c8e257a424adfe2ad731ece9803516e302))
+* **ci:** generate release metadata from the explicit source SHA ([be2f771](https://github.com/guneet-xyz/dockyard/commit/be2f771fa97f93953b927f758855c64d7a75aec4))
+* **ci:** verify scoped push permissions before building images ([6985716](https://github.com/guneet-xyz/dockyard/commit/6985716d77cc6287fb2c2597c821460a1b5c4523))
+
 ## 0.1.0 (2026-10-03)
 
 
