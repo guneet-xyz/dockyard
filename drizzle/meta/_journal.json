@@ -36,6 +36,13 @@
       "when": 1791061794132,
       "tag": "0004_wet_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791088374591,
+      "tag": "0005_abnormal_stingray",
+      "breakpoints": true
     }
   ]
 }

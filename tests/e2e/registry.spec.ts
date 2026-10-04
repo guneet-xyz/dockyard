@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test"
 import { readFile } from "node:fs/promises"
+import { createHash, randomUUID } from "node:crypto"
 
 test("guest can browse without login and has no write controls", async ({ page }) => {
   const errors: string[] = []
@@ -322,6 +323,134 @@ test("image and project deletion require typed confirmation, survive errors, and
   await page.reload()
   await expect(page.getByRole("heading", { name: project, exact: true })).toHaveCount(0)
   expect((await page.request.get(`${base}/api/projects/${project}`)).status()).toBe(404)
+})
+
+test("image and tag pull counts appear in detail, project lists, and image grids without counting UI reads", async ({
+  page,
+}) => {
+  test.skip(
+    !process.env.TEST_ADMIN_PASSWORD || !process.env.REGISTRY_WEBHOOK_SECRET,
+    "Set test admin and registry webhook credentials for pull-count browser checks",
+  )
+  const base = process.env.TEST_APP_URL ?? "http://localhost:3000"
+  const origin = { Origin: new URL(base).origin }
+  const username = process.env.TEST_ADMIN_USERNAME ?? "admin"
+  expect(
+    (
+      await page.request.post(`${base}/api/auth/login`, {
+        headers: origin,
+        data: { username, password: process.env.TEST_ADMIN_PASSWORD! },
+      })
+    ).status(),
+  ).toBe(200)
+  const project = `pull-browser-${Date.now().toString(36)}`
+  const image = `${project}/app`
+  expect(
+    (
+      await page.request.post(`${base}/api/projects`, {
+        headers: origin,
+        data: { name: project, visibility: "public" },
+      })
+    ).status(),
+  ).toBe(201)
+  expect(
+    (
+      await page.request.post(`${base}/api/repositories`, {
+        headers: origin,
+        data: { name: image, visibility: "public" },
+      })
+    ).status(),
+  ).toBe(201)
+  const issuing = await page.request.get(
+    `${base}/api/registry/token?service=dockyard-registry&scope=${encodeURIComponent(`repository:${image}:pull,push`)}`,
+    {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${username}:${process.env.TEST_ADMIN_PASSWORD!}`).toString("base64")}`,
+      },
+    },
+  )
+  expect(issuing.status()).toBe(200)
+  const registryHeaders = { Authorization: `Bearer ${(await issuing.json()).token}` }
+  const config = JSON.stringify({
+    architecture: "arm64",
+    os: "linux",
+    config: {},
+    rootfs: { type: "layers", diff_ids: [] },
+  })
+  const configDigest = `sha256:${createHash("sha256").update(config).digest("hex")}`
+  const upload = await page.request.post(`${base}/v2/${image}/blobs/uploads/`, {
+    headers: registryHeaders,
+  })
+  expect(upload.status()).toBe(202)
+  const location = new URL(upload.headers().location, base)
+  location.searchParams.set("digest", configDigest)
+  expect(
+    (
+      await page.request.put(location.toString(), {
+        headers: { ...registryHeaders, "Content-Type": "application/octet-stream" },
+        data: config,
+      })
+    ).status(),
+  ).toBe(201)
+  const mediaType = "application/vnd.oci.image.manifest.v1+json"
+  const manifest = JSON.stringify({
+    schemaVersion: 2,
+    mediaType,
+    config: {
+      mediaType: "application/vnd.oci.image.config.v1+json",
+      digest: configDigest,
+      size: Buffer.byteLength(config),
+    },
+    layers: [],
+  })
+  const digest = `sha256:${createHash("sha256").update(manifest).digest("hex")}`
+  for (const tag of ["latest", "stable"])
+    expect(
+      (
+        await page.request.put(`${base}/v2/${image}/manifests/${tag}`, {
+          headers: { ...registryHeaders, "Content-Type": mediaType },
+          data: manifest,
+        })
+      ).status(),
+    ).toBe(201)
+  const events = [
+    ...Array.from({ length: 5 }, () => "latest"),
+    ...Array.from({ length: 7 }, () => "stable"),
+  ].map((tag) => ({
+    id: randomUUID(),
+    action: "pull",
+    timestamp: new Date().toISOString(),
+    request: { method: "GET", useragent: "Docker/browser-test" },
+    target: { repository: image, tag, digest, mediaType },
+  }))
+  expect(
+    (
+      await page.request.post(`${base}/api/registry/events`, {
+        headers: { Authorization: `Bearer ${process.env.REGISTRY_WEBHOOK_SECRET!}` },
+        data: { events },
+      })
+    ).status(),
+  ).toBe(200)
+  await page.goto(`/projects/${project}/images/app`)
+  await expect(page.getByLabel("Image pull count", { exact: true })).toHaveText("12 pulls")
+  await expect(page.getByLabel("Pulls for tag latest", { exact: true })).toHaveText("5 pulls")
+  await expect(page.getByLabel("Pulls for tag stable", { exact: true })).toHaveText("7 pulls")
+  await page.goto(`/projects/${project}`)
+  await expect(page.getByLabel(`Pulls for image ${image}`, { exact: true })).toHaveText("12 pulls")
+  await page.goto("/repositories")
+  await page.getByRole("textbox", { name: "Search images" }).fill(image)
+  await expect(page.getByLabel(`Pulls for image ${image}`, { exact: true })).toHaveText("12 pulls")
+  await page.getByRole("button", { name: "Grid view" }).click()
+  await expect(page.getByLabel(`Pulls for image ${image}`, { exact: true })).toHaveText("12 pulls")
+  await page.getByRole("combobox", { name: "Sort images" }).click()
+  await page.getByRole("option", { name: "Most pulls", exact: true }).click()
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  const afterBrowsing = await page.request.get(`${base}/api/repositories/${image}`)
+  expect(afterBrowsing.status()).toBe(200)
+  expect((await afterBrowsing.json()).repository.pullCount).toBe(12)
 })
 
 test("automation resource selects handle fetch failures and empty collections", async ({

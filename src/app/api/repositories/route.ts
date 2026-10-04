@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { audit, currentUser, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
-import { projects, repositories } from "@/lib/db/schema"
+import { projects, repositories, imageTagPulls } from "@/lib/db/schema"
 import { eq, isNotNull } from "drizzle-orm"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 import { canWrite, validRepositoryName } from "@/lib/permissions"
@@ -77,10 +77,12 @@ export async function POST(request: Request) {
         .values(input)
         .onConflictDoUpdate({
           target: repositories.name,
-          set: { ...input, deletedAt: null, updatedAt: new Date() },
+          set: { ...input, deletedAt: null, updatedAt: new Date(), pullCountsResetAt: new Date() },
           setWhere: isNotNull(repositories.deletedAt),
         })
         .returning()
+      if (image && previous?.deletedAt)
+        await tx.delete(imageTagPulls).where(eq(imageTagPulls.repositoryName, input.name))
       return image
     })
     if (!created)

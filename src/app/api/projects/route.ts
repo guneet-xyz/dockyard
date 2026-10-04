@@ -49,7 +49,13 @@ export async function POST(request: Request) {
         .values(input)
         .onConflictDoUpdate({
           target: projects.name,
-          set: { ...input, deletedAt: null, createdAt: new Date(), updatedAt: new Date() },
+          set: {
+            ...input,
+            deletedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            pullCountsResetAt: new Date(),
+          },
           setWhere: isNotNull(projects.deletedAt),
         })
         .returning()

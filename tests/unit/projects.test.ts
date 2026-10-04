@@ -27,6 +27,7 @@ function image(name: string, tags = 1): Repository {
     description: "",
     updatedAt: null,
     tagCount: tags,
+    pullCount: 0,
     tags: [],
   }
 }

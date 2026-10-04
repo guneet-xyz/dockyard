@@ -1031,6 +1031,297 @@ async function main() {
     401,
     "Anonymous raw catalog blocked",
   )
+  const pullProject = `pulls-${suffix}`
+  const pullImage = `${pullProject}/app`
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: pullProject, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Create pull-count fixture project",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: pullImage, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Create pull-count fixture image",
+  )
+  const pullWriter = await token(`repository:${pullImage}:pull,push`, maintainer)
+  await uploadBlob(pullImage, pullWriter, config)
+  const pullChild = `sha256:${createHash("sha256").update(manifest).digest("hex")}`
+  await check(
+    await registryCall(
+      `/v2/${pullImage}/manifests/${pullChild}`,
+      pullWriter,
+      "PUT",
+      manifest,
+      "application/vnd.oci.image.manifest.v1+json",
+    ),
+    201,
+    "Push pull-count multi-platform child",
+  )
+  const pullIndex = JSON.stringify({
+    schemaVersion: 2,
+    mediaType: "application/vnd.oci.image.index.v1+json",
+    manifests: [
+      {
+        mediaType: "application/vnd.oci.image.manifest.v1+json",
+        digest: pullChild,
+        size: Buffer.byteLength(manifest),
+        platform: { os: "linux", architecture: "arm64" },
+      },
+    ],
+  })
+  for (const tag of ["latest", "stable"])
+    await check(
+      await registryCall(
+        `/v2/${pullImage}/manifests/${tag}`,
+        pullWriter,
+        "PUT",
+        pullIndex,
+        "application/vnd.oci.image.index.v1+json",
+      ),
+      201,
+      "Push aliases for independent tag counters",
+    )
+  const beforePulls = await check(
+    await browser(`/api/repositories/${pullImage}`),
+    200,
+    "UI metadata reads do not count as pulls",
+  )
+  assert.equal(beforePulls.repository.pullCount, 0)
+  assert.ok(beforePulls.images.every((image: { pullCount: number }) => image.pullCount === 0))
+  assertions += 2
+  const externalPull = await token(`repository:${pullImage}:pull`)
+  await check(
+    await registryCall(`/v2/${pullImage}/manifests/latest`, externalPull, "HEAD"),
+    200,
+    "HEAD probe does not count",
+  )
+  await check(
+    await registryCall(`/v2/${pullImage}/manifests/${pullChild}`, externalPull),
+    200,
+    "Digest-only platform fetch does not count",
+  )
+  await check(
+    await registryCall(`/v2/${pullImage}/blobs/${digest}`, externalPull),
+    200,
+    "Blob fetch does not count",
+  )
+  for (const tag of ["latest", "latest", "stable"])
+    await check(
+      await registryCall(`/v2/${pullImage}/manifests/${tag}`, externalPull),
+      200,
+      "Real external tagged manifest pull",
+    )
+  async function waitForPulls(total: number) {
+    const end = Date.now() + 15000
+    let detail
+    do {
+      const response = await browser(`/api/repositories/${pullImage}`)
+      assert.equal(response.status, 200)
+      detail = await response.json()
+      if (detail.repository.pullCount === total) return detail
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } while (Date.now() < end)
+    assert.equal(
+      detail.repository.pullCount,
+      total,
+      "Registry notification counters did not converge",
+    )
+    return detail
+  }
+  const countedPulls = await waitForPulls(3)
+  assert.equal(
+    countedPulls.images.find((image: { name: string }) => image.name === "latest").pullCount,
+    2,
+  )
+  assert.equal(
+    countedPulls.images.find((image: { name: string }) => image.name === "stable").pullCount,
+    1,
+  )
+  assertions += 2
+  const pullOverview = await check(
+    await browser("/api/repositories"),
+    200,
+    "Image listings include aggregate pull counts",
+  )
+  assert.equal(
+    pullOverview.repositories.find((image: { name: string }) => image.name === pullImage).pullCount,
+    3,
+  )
+  assertions++
+  if (process.env.REGISTRY_WEBHOOK_SECRET) {
+    const pullEvent = {
+      id: randomUUID(),
+      action: "pull",
+      timestamp: new Date().toISOString(),
+      request: { method: "GET", useragent: "Docker/test" },
+      target: {
+        repository: pullImage,
+        tag: "stable",
+        digest: `sha256:${createHash("sha256").update(pullIndex).digest("hex")}`,
+        mediaType: "application/vnd.oci.image.index.v1+json",
+      },
+    }
+    async function sendPullEvents(events: unknown[], authorized = true) {
+      return fetch(`${app}/api/registry/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authorized ? { Authorization: `Bearer ${process.env.REGISTRY_WEBHOOK_SECRET}` } : {}),
+        },
+        body: JSON.stringify({ events }),
+      })
+    }
+    await check(
+      await sendPullEvents([pullEvent], false),
+      401,
+      "Unauthenticated clients cannot forge counters",
+    )
+    await check(
+      await sendPullEvents([pullEvent, pullEvent]),
+      200,
+      "Duplicate IDs within one envelope are deduplicated",
+    )
+    await check(await sendPullEvents([pullEvent]), 200, "Notification retries are idempotent")
+    const concurrent = { ...pullEvent, id: randomUUID() }
+    await Promise.all(
+      Array.from({ length: 4 }, async () =>
+        check(await sendPullEvents([concurrent]), 200, "Concurrent duplicate notification"),
+      ),
+    )
+    const distinct = Array.from({ length: 8 }, () => ({ ...pullEvent, id: randomUUID() }))
+    await Promise.all(
+      distinct.map(async (event) =>
+        check(await sendPullEvents([event]), 200, "Concurrent unique pulls increment atomically"),
+      ),
+    )
+    const atomic = await waitForPulls(13)
+    assert.equal(
+      atomic.images.find((image: { name: string }) => image.name === "stable").pullCount,
+      11,
+    )
+    assertions++
+    const republishedIndex = JSON.stringify({
+      ...JSON.parse(pullIndex),
+      annotations: { "org.opencontainers.image.version": "replacement" },
+    })
+    await check(
+      await registryCall(
+        `/v2/${pullImage}/manifests/latest`,
+        pullWriter,
+        "PUT",
+        republishedIndex,
+        "application/vnd.oci.image.index.v1+json",
+      ),
+      201,
+      "Republish a tag without resetting its named pull history",
+    )
+    assert.equal(
+      (await waitForPulls(13)).images.find((image: { name: string }) => image.name === "latest")
+        .pullCount,
+      2,
+    )
+    assertions++
+    await check(
+      await registryCall(`/v2/${pullImage}/manifests/latest`, externalPull),
+      200,
+      "Pull the replacement tag content",
+    )
+    assert.equal(
+      (await waitForPulls(14)).images.find((image: { name: string }) => image.name === "latest")
+        .pullCount,
+      3,
+    )
+    assertions++
+    const ignoredPulls = [
+      { ...pullEvent, id: randomUUID(), request: { method: "HEAD" } },
+      {
+        ...pullEvent,
+        id: randomUUID(),
+        request: { method: "GET", useragent: "Dockyard/internal" },
+      },
+      { ...pullEvent, id: randomUUID(), target: { ...pullEvent.target, tag: undefined } },
+      {
+        ...pullEvent,
+        id: randomUUID(),
+        target: { ...pullEvent.target, mediaType: "application/octet-stream" },
+      },
+    ]
+    await check(
+      await sendPullEvents(ignoredPulls),
+      200,
+      "Ignore internal, HEAD, digest-only and blob notifications",
+    )
+    assert.equal((await waitForPulls(14)).repository.pullCount, 14)
+    assertions++
+    await check(
+      await browser(
+        `/api/repositories/${pullImage}`,
+        "PATCH",
+        { description: "Private metrics", visibility: "private" },
+        maintainerCookie,
+      ),
+      200,
+      "Pull counters follow image privacy",
+    )
+    await check(
+      await browser(`/api/repositories/${pullImage}`),
+      404,
+      "Private pull counts are not disclosed to guests",
+    )
+    await check(
+      await browser(`/api/repositories/${pullImage}`, "GET", undefined, viewerCookie),
+      200,
+      "Authenticated viewer can see private counters",
+    )
+    await check(
+      await browser(
+        `/api/repositories/${pullImage}`,
+        "DELETE",
+        { confirmName: pullImage },
+        maintainerCookie,
+      ),
+      200,
+      "Retire a counted image",
+    )
+    await check(
+      await sendPullEvents([{ ...pullEvent, id: randomUUID() }]),
+      200,
+      "Late pulls do not restore a deleted image",
+    )
+    const stale = {
+      ...pullEvent,
+      id: randomUUID(),
+      timestamp: new Date(Date.now() - 60000).toISOString(),
+    }
+    await check(
+      await browser(
+        "/api/repositories",
+        "POST",
+        { name: pullImage, visibility: "public" },
+        maintainerCookie,
+      ),
+      201,
+      "Recreated images reset their counters",
+    )
+    await check(
+      await sendPullEvents([pullEvent, stale]),
+      200,
+      "Old replay IDs and stale pre-recreation timestamps remain excluded",
+    )
+    assert.equal((await waitForPulls(0)).repository.pullCount, 0)
+    assertions++
+  }
+
   const deletionProject = `delete_${suffix}`
   const siblingProject = `${deletionProject}-other`
   const deletingImage = `${deletionProject}/api`

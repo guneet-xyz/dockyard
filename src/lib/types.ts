@@ -32,6 +32,7 @@ export type Repository = {
   legacy: boolean
   projectVisibility: Visibility | null
   tagCount: number
+  pullCount: number
   tags: string[]
   visibility: Visibility
   description: string
@@ -59,6 +60,7 @@ export type ImageTag = {
   created: string | null
   platforms: string[]
   mediaType: string
+  pullCount: number
 }
 export type AuditEvent = {
   id: string

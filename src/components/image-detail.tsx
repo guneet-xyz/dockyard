@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
+import { PullCount, PULL_COUNT_DESCRIPTION } from "@/components/pull-count"
 import type { ImageTag, Repository, Visibility } from "@/lib/types"
 import { formatBytes, timeAgo } from "@/lib/utils"
 import { useSession } from "@/hooks/use-session"
@@ -149,6 +150,7 @@ export default function ImageDetail({ name }: { name: string }) {
     queryKey: ["repository", name, page, search],
     queryFn: () =>
       api<Detail>(`/api/repositories/${name}?page=${page}&search=${encodeURIComponent(search)}`),
+    refetchInterval: 60000,
   })
   const remove = useMutation({
     mutationFn: () =>
@@ -213,6 +215,7 @@ export default function ImageDetail({ name }: { name: string }) {
           <Tag className="size-3" />
           {repository.tagCount} tags
         </Badge>
+        <PullCount count={repository.pullCount} label="Image pull count" />
       </div>
       <Tabs defaultValue="tags">
         <TabsList className="w-full justify-start">
@@ -270,6 +273,7 @@ export default function ImageDetail({ name }: { name: string }) {
                     </div>
                     <CardContent className="space-y-4 pt-4">
                       <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                        <PullCount count={image.pullCount} label={`Pulls for tag ${image.name}`} />
                         <span className="flex items-center gap-1.5">
                           <HardDrive className="size-3.5" />
                           {formatBytes(image.size)} compressed
@@ -385,6 +389,16 @@ export default function ImageDetail({ name }: { name: string }) {
                     <span className="text-muted-foreground">Image tags</span>
                     <span>{repository.tagCount}</span>
                   </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Pulls</span>
+                    <span title={PULL_COUNT_DESCRIPTION}>
+                      {repository.pullCount.toLocaleString("en-US")}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Counts external tag fetches since tracking was enabled, not verified completed
+                    downloads. Digest-only pulls and internal UI reads are excluded.
+                  </p>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Format</span>
                     <span>Docker / OCI</span>

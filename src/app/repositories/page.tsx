@@ -18,6 +18,7 @@ import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { cn } from "@/lib/utils"
 import { imageHref } from "@/lib/image-names"
+import { PullCount } from "@/components/pull-count"
 
 export default function RepositoriesPage() {
   const query = useRepositories()
@@ -33,7 +34,13 @@ export default function RepositoriesPage() {
           repo.description.toLowerCase().includes(search.toLowerCase())) &&
         (visibility === "all" || repo.visibility === visibility),
     )
-    .sort((a, b) => (sort === "tags" ? b.tagCount - a.tagCount : a.name.localeCompare(b.name)))
+    .sort((a, b) =>
+      sort === "tags"
+        ? b.tagCount - a.tagCount
+        : sort === "pulls"
+          ? b.pullCount - a.pullCount
+          : a.name.localeCompare(b.name),
+    )
   return (
     <div className="page-enter space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -84,6 +91,7 @@ export default function RepositoriesPage() {
           <SelectContent>
             <SelectItem value="name">Name A–Z</SelectItem>
             <SelectItem value="tags">Most tags</SelectItem>
+            <SelectItem value="pulls">Most pulls</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex rounded-md border p-0.5">
@@ -161,11 +169,12 @@ export default function RepositoriesPage() {
                 <p className="mt-2 line-clamp-2 min-h-9 text-xs leading-relaxed text-muted-foreground">
                   {repo.description || "Container image repository"}
                 </p>
-                <div className="mt-5 flex items-center justify-between border-t pt-4 text-xs text-muted-foreground">
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t pt-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
                     <Tag className="size-3" />
                     {repo.tagCount} tags
                   </span>
+                  <PullCount count={repo.pullCount} label={`Pulls for image ${repo.name}`} />
                   <ArrowUpRight className="size-4 group-hover:text-primary" />
                 </div>
               </Card>

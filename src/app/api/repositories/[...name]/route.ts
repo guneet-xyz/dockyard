@@ -13,6 +13,7 @@ import {
 } from "@/lib/registry"
 import { withImageResource } from "@/lib/resource-locks"
 import { deleteImageRepository } from "@/lib/resource-deletion"
+import { imagePullCounts } from "@/lib/pull-counts"
 
 type Context = { params: Promise<{ name: string[] }> }
 export const dynamic = "force-dynamic"
@@ -22,6 +23,7 @@ export async function GET(request: Request, context: Context) {
     const name = (await context.params).name.join("/")
     const user = await currentUser()
     const metadata = await readableRepository(name, user)
+    const pulls = await imagePullCounts(name)
     const tags = await listTags(name)
     const query = new URL(request.url).searchParams
     const page = Math.max(1, Number(query.get("page")) || 1)
@@ -37,11 +39,13 @@ export async function GET(request: Request, context: Context) {
     const images = []
     for (let i = 0; i < selected.length; i += 4)
       images.push(
-        ...(await Promise.all(selected.slice(i, i + 4).map((tag) => imageTag(name, tag)))),
+        ...(await Promise.all(
+          selected.slice(i, i + 4).map((tag) => imageTag(name, tag, pulls.byTag.get(tag) ?? 0)),
+        )),
       )
     return NextResponse.json(
       {
-        repository: { ...metadata, tagCount: tags.length, tags },
+        repository: { ...metadata, tagCount: tags.length, tags, pullCount: pulls.total },
         images,
         total: filtered.length,
         page,

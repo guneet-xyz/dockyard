@@ -7,6 +7,8 @@ import { canRead, validRepositoryName } from "./permissions"
 import { signRegistryToken } from "./registry-token"
 import { effectiveVisibility, repositoryIdentity } from "./image-names"
 import type { ImageTag, Repository, SessionUser } from "./types"
+import { INTERNAL_REGISTRY_USER_AGENT } from "./registry-events"
+import { repositoryPullTotals } from "./pull-counts"
 
 const acceptedManifests = [
   "application/vnd.oci.image.index.v1+json",
@@ -41,7 +43,11 @@ export async function registryRequest(path: string, name?: string, method = "GET
   try {
     response = await fetch(`${config.registryUrl}${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}`, Accept: acceptedManifests },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: acceptedManifests,
+        "User-Agent": INTERNAL_REGISTRY_USER_AGENT,
+      },
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
       redirect: "error",
@@ -163,10 +169,11 @@ export async function listRepositories(
   includeDeleted = false,
   projectName?: string,
 ): Promise<Repository[]> {
-  const [names, metadata, projectRows] = await Promise.all([
+  const [names, metadata, projectRows, pullTotals] = await Promise.all([
     paginatedList("/v2/_catalog", "repositories"),
     connection.select().from(repositories),
     connection.select().from(projects),
+    repositoryPullTotals(connection),
   ])
   const byName = new Map(metadata.map((repo) => [repo.name, repo]))
   const byProject = new Map(projectRows.map((project) => [project.name, project]))
@@ -205,6 +212,7 @@ export async function listRepositories(
           projectVisibility: project?.visibility ?? null,
           tags,
           tagCount: tags.length,
+          pullCount: pullTotals.get(name) ?? 0,
           visibility: effectiveVisibility(
             meta?.visibility,
             project?.visibility,
@@ -220,12 +228,12 @@ export async function listRepositories(
   return results
 }
 
-export async function imageTag(name: string, tag: string): Promise<ImageTag> {
+export async function imageTag(name: string, tag: string, pullCount = 0): Promise<ImageTag> {
   const path = repositoryPath(name)
   const response = await registryRequest(`/v2/${path}/manifests/${encodeURIComponent(tag)}`, name)
   const manifest: Manifest = await response.json()
   const digest = response.headers.get("Docker-Content-Digest") ?? ""
-  const base = { name: tag, digest, created: null, mediaType: manifest.mediaType }
+  const base = { name: tag, digest, created: null, mediaType: manifest.mediaType, pullCount }
   if (manifest.manifests) {
     // Descriptor sizes are manifest sizes, not image sizes; inspect child manifests.
     let size = 0

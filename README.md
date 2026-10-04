@@ -7,6 +7,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 - Searchable repositories and image tags, platform/digest details, and copyable Docker commands.
 - Projects with images under exactly `project/image`, such as `dockyard/init` and `dockyard/web`.
 - Confirmed deletion of complete images/projects, with privacy-preserving deletion markers.
+- Image and tag pull counts from external tagged-manifest notifications, without counting UI reads.
 - Public guest pulls and authenticated access to private repositories.
 - Viewer, maintainer, and admin roles; user management and audit history.
 - Scoped automation keys for CI/CD, with project/image grants, expiry, and revocation.
@@ -61,6 +62,7 @@ The detailed documentation lives in [`docs/`](docs/README.md):
 - [Own proxy without ingress](docs/deployment/custom-proxy.md): disabling ingress, backend access, Caddy/Nginx routing, and auth checks.
 - [URL and TLS configuration](docs/configuration.md): what each URL/port variable controls and why incorrect TLS ownership causes redirect loops.
 - [Projects and images](docs/projects.md): namespaces, visibility, publishing, and compatibility with existing paths.
+- [Pull counts](docs/pull-counts.md): image/tag metrics, counting rules, notification setup, and limitations.
 - [Automation keys](docs/automation-keys.md): least-privilege registry credentials for CI/CD and unattended deployments.
 - [CI/CD and releases](docs/releases.md): publishing all four images, conventional-commit versions, and release recovery.
 - [Reference](docs/reference.md): ingress variables, authentication/RBAC, persistence, maintenance, local development, tests, and architecture.

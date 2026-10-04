@@ -46,7 +46,7 @@ services:
       REGISTRY_AUTH_TOKEN_ISSUER: dockyard
       REGISTRY_HTTP_SECRET: ${REGISTRY_HTTP_SECRET:?Set REGISTRY_HTTP_SECRET in .env}
       REGISTRY_NOTIFICATIONS_ENDPOINTS: >-
-        [{"name":"dockyard","url":"http://web:3000/api/registry/events","timeout":"5s","threshold":5,"backoff":"5s","headers":{"Authorization":["Bearer ${REGISTRY_WEBHOOK_SECRET:?Set REGISTRY_WEBHOOK_SECRET in .env}"]},"ignore":{"actions":["pull"]}}]
+        [{"name":"dockyard","url":"http://web:3000/api/registry/events","timeout":"5s","threshold":5,"backoff":"5s","headers":{"Authorization":["Bearer ${REGISTRY_WEBHOOK_SECRET:?Set REGISTRY_WEBHOOK_SECRET in .env}"]},"ignore":{"mediaTypes":["application/octet-stream"]}}]
     volumes:
       - registry_data:/var/lib/registry
       - registry_certs:/certs:ro

@@ -1,10 +1,12 @@
 import {
   boolean,
+  bigint,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -46,6 +48,7 @@ export const projects = pgTable("projects", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  pullCountsResetAt: timestamp("pull_counts_reset_at", { withTimezone: true }),
 })
 
 export const accessKeys = pgTable(
@@ -74,6 +77,25 @@ export const repositories = pgTable("repositories", {
   description: text("description").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  pullCountsResetAt: timestamp("pull_counts_reset_at", { withTimezone: true }),
+})
+
+// Counts belong to named tags, not digests (aliases must remain independent).
+// No FK is needed: Distribution can contain images not yet configured in Dockyard.
+export const imageTagPulls = pgTable(
+  "image_tag_pulls",
+  {
+    repositoryName: text("repository_name").notNull(),
+    tag: text("tag").notNull(),
+    pullCount: bigint("pull_count", { mode: "number" }).notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.repositoryName, table.tag] })],
+)
+
+// A retry must not increment a counter twice. Do not retain client identities/IPs.
+export const registryPullEvents = pgTable("registry_pull_events", {
+  id: uuid("id").primaryKey(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const auditEvents = pgTable(

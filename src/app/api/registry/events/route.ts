@@ -8,24 +8,11 @@ import { config } from "@/lib/config"
 import { apiError, HttpError } from "@/lib/http"
 import { validRepositoryName } from "@/lib/permissions"
 import { withImageResource } from "@/lib/resource-locks"
+import { registryEventSchema } from "@/lib/registry-events"
+import { recordPull } from "@/lib/pull-counts"
 
 const eventSchema = z.object({
-  events: z
-    .array(
-      z.object({
-        id: z.uuid(),
-        action: z.string(),
-        timestamp: z.iso.datetime({ offset: true }),
-        actor: z.object({ name: z.string().optional() }).optional(),
-        target: z.object({
-          repository: z.string().optional(),
-          mediaType: z.string().optional(),
-          digest: z.string().optional(),
-          tag: z.string().optional(),
-        }),
-      }),
-    )
-    .max(500),
+  events: z.array(registryEventSchema).max(500),
 })
 
 export async function POST(request: Request) {
@@ -41,6 +28,10 @@ export async function POST(request: Request) {
     if (text.length > 1024 * 1024) throw new HttpError(413, "Notification is too large.")
     const { events } = eventSchema.parse(JSON.parse(text))
     for (const event of events) {
+      if (event.action === "pull") {
+        await recordPull(event)
+        continue
+      }
       const name = event.target.repository
       const type = event.target.mediaType ?? ""
       if (

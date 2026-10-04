@@ -7,6 +7,7 @@ import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { VisibilityBadge } from "./shared"
+import { PullCount } from "./pull-count"
 
 export function RepositoryTable({
   repositories,
@@ -22,6 +23,7 @@ export function RepositoryTable({
           <TableHead>Image</TableHead>
           <TableHead>Visibility</TableHead>
           <TableHead>Tags</TableHead>
+          <TableHead>Pulls</TableHead>
           <TableHead>Latest tag</TableHead>
           <TableHead className="w-10">
             <span className="sr-only">Open</span>
@@ -60,6 +62,9 @@ export function RepositoryTable({
                 <Tag className="size-3" />
                 {repo.tagCount}
               </span>
+            </TableCell>
+            <TableCell>
+              <PullCount count={repo.pullCount} label={`Pulls for image ${repo.name}`} />
             </TableCell>
             <TableCell>
               {repo.tags.length ? (

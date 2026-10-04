@@ -14,6 +14,8 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
+Read [Image and tag pull counts](pull-counts.md) for the fetch metric definition, aliases, multi-platform handling, notification setup, and counting/privacy guarantees.
+
 Read [CI/CD and releases](releases.md) for GitHub Actions setup, registry secrets, conventional commits, multi-architecture image tags, and release recovery.
 
 Read [Automation keys](automation-keys.md) for project/image-scoped CI credentials, Docker login, expiry, revocation, and workflow examples.
