@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
-import { dockerArchive, ociArchive, tarBytes } from "../tests/helpers/image-archives"
+import sharp from "sharp"
 
 // Run against an isolated stack: this creates real users and repositories.
 const app = process.env.TEST_APP_URL ?? "http://localhost:3000"
@@ -1138,156 +1138,149 @@ async function main() {
       maintainerCookie,
     ),
     200,
-    "Browser uploads inherit the image's existing private ceiling",
+    "Photos inherit the image's existing private ceiling",
   )
-  function uploadUrl(tag: string, expectedDigest?: string) {
-    const url = new URL(`${app}/api/registry/upload`)
-    url.searchParams.set("name", uploadImage)
-    url.searchParams.set("tag", tag)
-    if (expectedDigest) url.searchParams.set("expectedDigest", expectedDigest)
-    return url
-  }
-  async function archiveUpload(
+  const photo = await sharp({
+    create: { width: 1024, height: 800, channels: 4, background: "#55dda8" },
+  })
+    .png()
+    .toBuffer()
+  const logoPath = (kind: "image" | "project", name: string) =>
+    `/api/logos?${new URLSearchParams({ kind, name })}`
+  async function uploadPhoto(
+    kind: "image" | "project",
+    name: string,
     bytes: Buffer,
-    tag: string,
     cookie?: string,
-    expectedDigest?: string,
     origin = app,
   ) {
-    return fetch(uploadUrl(tag, expectedDigest), {
+    return fetch(`${app}${logoPath(kind, name)}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/octet-stream",
         Origin: origin,
+        "Content-Type": "application/octet-stream",
         ...(cookie ? { Cookie: cookie } : {}),
       },
       body: new Uint8Array(bytes),
     })
   }
-  const dockerSaved = await dockerArchive({ gzip: true })
-  await check(await fetch(uploadUrl("browser")), 401, "Guest cannot preflight an image upload")
+  await check(await uploadPhoto("image", uploadImage, photo), 401, "Guests cannot upload photos")
   await check(
-    await fetch(uploadUrl("browser"), { headers: { Cookie: viewerCookie } }),
+    await uploadPhoto("image", uploadImage, photo, viewerCookie),
     403,
-    "Viewer cannot preflight an image upload",
+    "Viewers cannot upload photos",
   )
-  await check(await archiveUpload(dockerSaved, "browser"), 401, "Guest cannot upload archives")
   await check(
-    await archiveUpload(dockerSaved, "browser", viewerCookie),
+    await uploadPhoto("image", uploadImage, photo, maintainerCookie, "http://evil.example"),
     403,
-    "Viewer cannot upload archives",
+    "Cross-origin photo upload rejected",
   )
   await check(
-    await archiveUpload(dockerSaved, "browser", maintainerCookie, undefined, "http://evil.example"),
-    403,
-    "Cross-origin archive upload rejected",
-  )
-  await check(
-    await archiveUpload(Buffer.from("not an image"), "browser", maintainerCookie),
-    400,
-    "Invalid archives never publish a tag",
-  )
-  await check(
-    await archiveUpload(
-      await tarBytes([{ name: "../escape", bytes: "bad" }]),
-      "browser",
+    await uploadPhoto(
+      "image",
+      uploadImage,
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
       maintainerCookie,
     ),
     400,
-    "Archive traversal rejected through the actual upload API",
+    "SVG/script uploads are rejected",
   )
   await check(
-    await archiveUpload(dockerSaved, "../bad", maintainerCookie),
-    400,
-    "Invalid destination tags rejected",
+    await uploadPhoto("image", uploadImage, Buffer.alloc(5 * 1024 ** 2 + 1), maintainerCookie),
+    413,
+    "Oversized photos are rejected",
   )
-  const preflightUpload = await check(
-    await fetch(uploadUrl("browser"), { headers: { Cookie: maintainerCookie } }),
+  const projectPhoto = await check(
+    await uploadPhoto("project", uploadProject, photo, maintainerCookie),
     200,
-    "Upload status reports size limits and no existing tag",
+    "Upload project photo/logo",
   )
-  assert.equal(preflightUpload.currentDigest, null)
-  assert.ok(preflightUpload.maxBytes > dockerSaved.length)
-  assertions += 2
-  const uploadedDocker = await check(
-    await archiveUpload(dockerSaved, "browser", maintainerCookie),
+  const imagePhoto = await check(
+    await uploadPhoto("image", uploadImage, photo, maintainerCookie),
     200,
-    "Maintainer uploads gzip Docker-save archive",
+    "Upload repository photo/logo",
   )
-  assert.equal(uploadedDocker.format, "docker")
-  assert.deepEqual(uploadedDocker.platforms, ["linux/arm64"])
-  assertions += 2
-  const uploadedDetail = await check(
-    await browser(`/api/repositories/${uploadImage}`, "GET", undefined, viewerCookie),
-    200,
-    "Uploaded image appears with tag and architecture",
-  )
-  assert.equal(
-    uploadedDetail.images.find((image: { name: string }) => image.name === "browser").digest,
-    uploadedDocker.digest,
-  )
-  assert.equal(uploadedDetail.repository.description, imageDescription)
-  assertions += 2
-  await check(
-    await browser(`/api/repositories/${uploadImage}`),
-    404,
-    "Browser upload does not make private images public",
-  )
-  const uploadedPull = await token(`repository:${uploadImage}:pull`, viewer)
-  const dockerManifest = await check(
-    await registryCall(`/v2/${uploadImage}/manifests/browser`, uploadedPull),
-    200,
-    "Actual registry serves uploaded image manifest",
-  )
-  const storedLayer = await registryCall(
-    `/v2/${uploadImage}/blobs/${dockerManifest.layers[0].digest}`,
-    uploadedPull,
-  )
-  assert.equal(storedLayer.status, 200)
-  assert.ok(
-    Buffer.from(await storedLayer.arrayBuffer()).includes(Buffer.from("Uploaded from Dockyard")),
-  )
-  assertions += 2
-  await check(
-    await archiveUpload(dockerSaved, "browser", maintainerCookie),
-    409,
-    "Existing tags require explicit replacement digest",
-  )
-  const uploadedOci = await check(
-    await archiveUpload(
-      await ociArchive({ multi: true }),
-      "browser",
-      maintainerCookie,
-      uploadedDocker.digest,
-    ),
-    200,
-    "Upload multi-platform OCI index with explicit tag replacement",
-  )
-  assert.deepEqual(uploadedOci.platforms, ["linux/amd64", "linux/arm64"])
-  assert.ok(uploadedOci.digest !== uploadedDocker.digest)
-  assertions += 2
-  const ociManifest = await check(
-    await registryCall(`/v2/${uploadImage}/manifests/browser`, uploadedPull),
-    200,
-    "Registry serves uploaded multi-platform index",
-  )
-  assert.equal(ociManifest.manifests.length, 2)
+  assert.ok(projectPhoto.logoUrl && imagePhoto.logoUrl)
   assertions++
   await check(
-    await archiveUpload(dockerSaved, "browser", maintainerCookie, uploadedDocker.digest),
-    409,
-    "Stale tag replacement digest is rejected",
+    await browser(imagePhoto.logoUrl),
+    404,
+    "Private logo URLs do not disclose data to guests",
+  )
+  const allowedLogo = await browser(imagePhoto.logoUrl, "GET", undefined, viewerCookie)
+  assert.equal(allowedLogo.status, 200)
+  assert.equal(allowedLogo.headers.get("content-type"), "image/webp")
+  assert.equal(allowedLogo.headers.get("cache-control"), "private, no-store")
+  assert.equal(allowedLogo.headers.get("x-content-type-options"), "nosniff")
+  const picture = await sharp(Buffer.from(await allowedLogo.arrayBuffer())).metadata()
+  assert.equal(picture.width, 512)
+  assert.equal(picture.height, 400)
+  assertions += 6
+  const logoDetail = await check(
+    await browser(`/api/repositories/${uploadImage}`, "GET", undefined, viewerCookie),
+    200,
+    "Repository DTO contains its logo URL",
+  )
+  assert.equal(logoDetail.repository.logoUrl, imagePhoto.logoUrl)
+  assert.equal(logoDetail.repository.description, imageDescription)
+  assert.equal(logoDetail.repository.tagCount, 0, "Photo upload must not publish container tags")
+  assertions += 3
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { visibility: "public" },
+      maintainerCookie,
+    ),
+    200,
+    "Public resources expose their photos to guests",
+  )
+  assert.equal((await browser(imagePhoto.logoUrl)).status, 200)
+  assertions++
+  const replacement = await sharp({
+    create: { width: 40, height: 40, channels: 3, background: "#ee8855" },
+  })
+    .jpeg()
+    .toBuffer()
+  const changedPhoto = await check(
+    await uploadPhoto("image", uploadImage, replacement, maintainerCookie),
+    200,
+    "Replace a photo using JPEG input",
+  )
+  assert.ok(changedPhoto.logoUrl !== imagePhoto.logoUrl)
+  assertions++
+  await check(
+    await browser(logoPath("image", uploadImage), "DELETE", undefined, viewerCookie),
+    403,
+    "Viewers cannot remove logos",
   )
   await check(
-    await archiveUpload(await ociArchive({ corrupt: true }), "corrupt", maintainerCookie),
-    400,
-    "OCI digest mismatch rejected before registry writes",
+    await browser(logoPath("image", uploadImage), "DELETE", undefined, maintainerCookie),
+    200,
+    "Remove photo/logo",
+  )
+  await check(await browser(changedPhoto.logoUrl), 404, "Removed logos are no longer served")
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "DELETE",
+      { confirmName: uploadProject },
+      maintainerCookie,
+    ),
+    200,
+    "Deleting a project removes its photo/logo",
   )
   await check(
-    await archiveUpload(await dockerArchive({ multiple: true }), "ambiguous", maintainerCookie),
-    400,
-    "Ambiguous multi-image Docker save rejected",
+    await browser(projectPhoto.logoUrl, "GET", undefined, adminCookie),
+    404,
+    "Deleted project logos stay inaccessible",
   )
+  const archiveEndpoint = await fetch(
+    `${app}/api/registry/upload?name=${uploadImage}&tag=archive`,
+    { method: "POST", headers: { Origin: app, Cookie: maintainerCookie }, body: "archive" },
+  )
+  assert.equal(archiveEndpoint.status, 404, "Mistaken container archive upload endpoint is removed")
+  assertions++
 
   const pullProject = `pulls-${suffix}`
   const pullImage = `${pullProject}/app`

@@ -7,6 +7,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  customType,
   text,
   timestamp,
   uuid,
@@ -79,6 +80,21 @@ export const repositories = pgTable("repositories", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   pullCountsResetAt: timestamp("pull_counts_reset_at", { withTimezone: true }),
 })
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" })
+// Raster pictures are bounded and normalized before storage. Keeping them in
+// PostgreSQL makes them durable across container recreation and web replicas.
+export const resourceLogos = pgTable(
+  "resource_logos",
+  {
+    kind: text("kind").$type<"image" | "project">().notNull(),
+    name: text("name").notNull(),
+    data: bytea("data").notNull(),
+    digest: text("digest").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.kind, table.name] })],
+)
 
 // Counts belong to named tags, not digests (aliases must remain independent).
 // No FK is needed: Distribution can contain images not yet configured in Dockyard.

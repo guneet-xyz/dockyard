@@ -33,10 +33,11 @@ export async function withImageResource<T>(
 export async function withProjectResource<T>(
   name: string,
   callback: (tx: DatabaseExecutor) => Promise<T>,
+  write = true,
 ) {
   if (!validProjectName(name)) throw new HttpError(400, "Invalid project name.")
   return db().transaction(async (tx) => {
-    await lockNamespace(tx, `project:${name}`, true)
+    await lockNamespace(tx, `project:${name}`, write)
     return callback(tx)
   })
 }

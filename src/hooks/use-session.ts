@@ -10,7 +10,6 @@ export function useSession() {
       api<{
         user: SessionUser | null
         registryHost: string
-        imageUploadLimits: { maxBytes: number; maxExpandedBytes: number }
       }>("/api/auth/me"),
   })
 }

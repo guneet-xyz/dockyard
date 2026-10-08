@@ -1,6 +1,6 @@
 "use client"
 import Link from "next/link"
-import { ArrowUpRight, Box, ChevronRight, PackageOpen, Tag } from "lucide-react"
+import { ArrowUpRight, ChevronRight, PackageOpen, Tag } from "lucide-react"
 import type { Repository } from "@/lib/types"
 import { imageHref } from "@/lib/image-names"
 import { Button } from "./ui/button"
@@ -8,6 +8,7 @@ import { Badge } from "./ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { VisibilityBadge } from "./shared"
 import { PullCount } from "./pull-count"
+import { ResourceIcon } from "./resource-icon"
 
 export function RepositoryTable({
   repositories,
@@ -35,9 +36,12 @@ export function RepositoryTable({
           <TableRow key={repo.name}>
             <TableCell>
               <Link href={imageHref(repo.name)} className="group flex min-w-44 items-center gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground transition-colors group-hover:border-primary/25 group-hover:text-primary">
-                  <Box className="size-[18px]" />
-                </div>
+                <ResourceIcon
+                  kind="image"
+                  name={repo.name}
+                  logoUrl={repo.logoUrl}
+                  className="size-9 group-hover:border-primary/25"
+                />
                 <div>
                   <p className="font-medium transition-colors group-hover:text-primary">
                     {withinProject ? repo.imageName : repo.name}

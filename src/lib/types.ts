@@ -36,11 +36,13 @@ export type Repository = {
   tags: string[]
   visibility: Visibility
   description: string
+  logoUrl: string | null
   updatedAt: string | null
 }
 export type Project = {
   name: string
   description: string
+  logoUrl: string | null
   visibility: Visibility
   imageCount: number
   tagCount: number

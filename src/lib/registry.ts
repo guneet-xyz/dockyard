@@ -9,6 +9,7 @@ import { effectiveVisibility, repositoryIdentity } from "./image-names"
 import type { ImageTag, Repository, SessionUser } from "./types"
 import { INTERNAL_REGISTRY_USER_AGENT } from "./registry-events"
 import { repositoryPullTotals } from "./pull-counts"
+import { logoReferences } from "./logo-references"
 
 const acceptedManifests = [
   "application/vnd.oci.image.index.v1+json",
@@ -169,11 +170,12 @@ export async function listRepositories(
   includeDeleted = false,
   projectName?: string,
 ): Promise<Repository[]> {
-  const [names, metadata, projectRows, pullTotals] = await Promise.all([
+  const [names, metadata, projectRows, pullTotals, logos] = await Promise.all([
     paginatedList("/v2/_catalog", "repositories"),
     connection.select().from(repositories),
     connection.select().from(projects),
     repositoryPullTotals(connection),
+    logoReferences(connection),
   ])
   const byName = new Map(metadata.map((repo) => [repo.name, repo]))
   const byProject = new Map(projectRows.map((project) => [project.name, project]))
@@ -219,6 +221,7 @@ export async function listRepositories(
             config.defaultVisibility,
           ),
           description: meta?.description ?? "",
+          logoUrl: logos.get(`image:${name}`) ?? null,
           updatedAt: meta?.updatedAt?.toISOString() ?? null,
         }
       }),

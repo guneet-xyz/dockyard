@@ -1,7 +1,7 @@
 "use client"
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowUpRight, Box, LayoutGrid, List, RefreshCw, Search, Tag, X } from "lucide-react"
+import { ArrowUpRight, LayoutGrid, List, RefreshCw, Search, Tag, X } from "lucide-react"
 import { useRepositories } from "@/hooks/use-repositories"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { cn } from "@/lib/utils"
 import { imageHref } from "@/lib/image-names"
 import { PullCount } from "@/components/pull-count"
+import { ResourceIcon } from "@/components/resource-icon"
 
 export default function RepositoriesPage() {
   const query = useRepositories()
@@ -160,9 +161,7 @@ export default function RepositoriesPage() {
             <Link key={repo.name} href={imageHref(repo.name)} className="group">
               <Card className="h-full p-5 transition-colors hover:border-primary/40">
                 <div className="mb-5 flex items-center justify-between">
-                  <div className="flex size-10 items-center justify-center rounded-lg border bg-muted">
-                    <Box className="size-5 text-primary" />
-                  </div>
+                  <ResourceIcon kind="image" name={repo.name} logoUrl={repo.logoUrl} />
                   <VisibilityBadge visibility={repo.visibility} />
                 </div>
                 <h2 className="truncate font-medium group-hover:text-primary">{repo.name}</h2>

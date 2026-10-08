@@ -15,6 +15,7 @@ import { withImageResource } from "@/lib/resource-locks"
 import { deleteImageRepository } from "@/lib/resource-deletion"
 import { imagePullCounts } from "@/lib/pull-counts"
 import { resourceSettingsSchema } from "@/lib/resource-settings"
+import { logoReferences } from "@/lib/logo-references"
 
 type Context = { params: Promise<{ name: string[] }> }
 export const dynamic = "force-dynamic"
@@ -25,6 +26,7 @@ export async function GET(request: Request, context: Context) {
     const user = await currentUser()
     const metadata = await readableRepository(name, user)
     const pulls = await imagePullCounts(name)
+    const logos = await logoReferences()
     const tags = await listTags(name)
     const query = new URL(request.url).searchParams
     const page = Math.max(1, Number(query.get("page")) || 1)
@@ -46,7 +48,13 @@ export async function GET(request: Request, context: Context) {
       )
     return NextResponse.json(
       {
-        repository: { ...metadata, tagCount: tags.length, tags, pullCount: pulls.total },
+        repository: {
+          ...metadata,
+          tagCount: tags.length,
+          tags,
+          pullCount: pulls.total,
+          logoUrl: logos.get(`image:${name}`) ?? null,
+        },
         images,
         total: filtered.length,
         page,

@@ -7,6 +7,7 @@ import { canRead } from "./permissions"
 import { validProjectName } from "./image-names"
 import { listRepositories } from "./registry"
 import type { Project, Repository, SessionUser } from "./types"
+import { logoReferences } from "./logo-references"
 
 export async function projectMetadata(name: string, connection: DatabaseExecutor = db()) {
   if (!validProjectName(name)) throw new HttpError(400, "Invalid project name.")
@@ -24,6 +25,7 @@ export function summarizeProjects(
   }[],
   images: Repository[],
   user: SessionUser | null,
+  logos = new Map<string, string>(),
 ) {
   const byName = new Map<string, Project>()
   const hidden = new Set(
@@ -34,6 +36,7 @@ export function summarizeProjects(
       byName.set(row.name, {
         name: row.name,
         description: row.description,
+        logoUrl: logos.get(`project:${row.name}`) ?? null,
         visibility: row.visibility,
         updatedAt: row.updatedAt.toISOString(),
         imageCount: 0,
@@ -47,6 +50,7 @@ export function summarizeProjects(
       project = {
         name: image.projectName,
         description: "",
+        logoUrl: logos.get(`project:${image.projectName}`) ?? null,
         visibility: image.projectVisibility ?? config.defaultVisibility,
         updatedAt: image.updatedAt,
         imageCount: 0,
@@ -64,9 +68,13 @@ export function summarizeProjects(
 }
 
 export async function listProjects(user: SessionUser | null) {
-  const [rows, images] = await Promise.all([db().select().from(projects), listRepositories(user)])
+  const [rows, images, logos] = await Promise.all([
+    db().select().from(projects),
+    listRepositories(user),
+    logoReferences(),
+  ])
   return {
-    projects: summarizeProjects(rows, images, user),
+    projects: summarizeProjects(rows, images, user, logos),
     ungroupedCount: images.filter((image) => !image.projectName).length,
   }
 }
@@ -80,7 +88,12 @@ export async function readableProject(
   if (metadata && (metadata.deletedAt || !canRead(user, metadata.visibility)))
     throw new HttpError(404, "Project not found.")
   const images = await listRepositories(user, connection, false, name)
-  const [project] = summarizeProjects(metadata ? [metadata] : [], images, user)
+  const [project] = summarizeProjects(
+    metadata ? [metadata] : [],
+    images,
+    user,
+    await logoReferences(connection),
+  )
   if (!project) throw new HttpError(404, "Project not found.")
   return { project, images }
 }

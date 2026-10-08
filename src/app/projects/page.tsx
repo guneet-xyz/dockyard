@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowUpRight, Box, FolderOpen, RefreshCw, Search, Tag } from "lucide-react"
 import { useProjects } from "@/hooks/use-projects"
 import { NewProjectDialog } from "@/components/new-project-dialog"
+import { ResourceIcon } from "@/components/resource-icon"
 import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -83,9 +84,12 @@ export default function ProjectsPage() {
             <Link key={project.name} href={`/projects/${project.name}`} className="group">
               <Card className="h-full p-5 transition-colors hover:border-primary/40">
                 <div className="mb-5 flex items-center justify-between">
-                  <div className="flex size-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
-                    <FolderOpen className="size-5 text-primary" />
-                  </div>
+                  <ResourceIcon
+                    kind="project"
+                    name={project.name}
+                    logoUrl={project.logoUrl}
+                    className="size-11 rounded-xl border-primary/20 bg-primary/5"
+                  />
                   <VisibilityBadge visibility={project.visibility} />
                 </div>
                 <div className="flex items-center justify-between">

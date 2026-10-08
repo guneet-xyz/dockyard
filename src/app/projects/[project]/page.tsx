@@ -3,13 +3,15 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, Box, FolderOpen, Loader2, Search, Settings2 } from "lucide-react"
+import { ArrowLeft, Box, Loader2, Search, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
 import { DescriptionEditor } from "@/components/description-editor"
 import { Textarea } from "@/components/ui/textarea"
 import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+import { LogoEditor } from "@/components/logo-editor"
+import { ResourceIcon } from "@/components/resource-icon"
 import type { Project, Repository, Visibility } from "@/lib/types"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { RepositoryTable, EmptyRepositories } from "@/components/repository-table"
@@ -131,9 +133,12 @@ export default function ProjectPage() {
       </Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
-            <FolderOpen className="size-6 text-primary" />
-          </div>
+          <ResourceIcon
+            kind="project"
+            name={project.name}
+            logoUrl={project.logoUrl}
+            className="size-12 rounded-xl border-primary/20 bg-primary/5"
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="break-all text-2xl font-semibold tracking-tight">{project.name}</h1>
@@ -147,6 +152,7 @@ export default function ProjectPage() {
         </div>
         {canWrite && (
           <div className="flex flex-wrap items-center gap-2">
+            <LogoEditor kind="project" name={project.name} logoUrl={project.logoUrl} />
             <DescriptionEditor
               kind="project"
               name={project.name}

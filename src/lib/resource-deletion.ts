@@ -1,5 +1,6 @@
 import { db, type DatabaseExecutor } from "./db"
-import { auditEvents, projects, repositories } from "./db/schema"
+import { auditEvents, projects, repositories, resourceLogos } from "./db/schema"
+import { and, eq } from "drizzle-orm"
 import { HttpError } from "./http"
 import { projectMetadata } from "./projects"
 import {
@@ -79,6 +80,9 @@ async function retireImage(connection: DatabaseExecutor, name: string, deletedAt
       updatedAt: deletedAt,
     })
     .onConflictDoUpdate({ target: repositories.name, set: { deletedAt, updatedAt: deletedAt } })
+  await connection
+    .delete(resourceLogos)
+    .where(and(eq(resourceLogos.kind, "image"), eq(resourceLogos.name, name)))
 }
 
 async function reportPartialFailure(
@@ -159,6 +163,9 @@ export async function deleteProject(name: string, actor: SessionUser) {
           updatedAt: deletedAt,
         })
         .onConflictDoUpdate({ target: projects.name, set: { deletedAt, updatedAt: deletedAt } })
+      await tx
+        .delete(resourceLogos)
+        .where(and(eq(resourceLogos.kind, "project"), eq(resourceLogos.name, name)))
       await tx.insert(auditEvents).values({
         actor: actor.username,
         action: "project.delete",

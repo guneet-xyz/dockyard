@@ -25,6 +25,7 @@ function image(name: string, tags = 1): Repository {
     visibility: "public",
     projectVisibility: null,
     description: "",
+    logoUrl: null,
     updatedAt: null,
     tagCount: tags,
     pullCount: 0,

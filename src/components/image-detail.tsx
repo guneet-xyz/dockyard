@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeft,
   ArrowRight,
-  Box,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -27,7 +26,8 @@ import { PullCount, PULL_COUNT_DESCRIPTION } from "@/components/pull-count"
 import { DescriptionEditor } from "@/components/description-editor"
 import { Textarea } from "@/components/ui/textarea"
 import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
-import { UploadImageDialog } from "@/components/upload-image-dialog"
+import { LogoEditor } from "@/components/logo-editor"
+import { ResourceIcon } from "@/components/resource-icon"
 import type { ImageTag, Repository, Visibility } from "@/lib/types"
 import { formatBytes, timeAgo } from "@/lib/utils"
 import { useSession } from "@/hooks/use-session"
@@ -202,9 +202,12 @@ export default function ImageDetail({ name }: { name: string }) {
         {repository.projectName ? `Project ${repository.projectName}` : "All images"}
       </Link>
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
-          <Box className="size-6 text-primary" />
-        </div>
+        <ResourceIcon
+          kind="image"
+          name={name}
+          logoUrl={repository.logoUrl}
+          className="size-12 rounded-xl border-primary/20 bg-primary/5"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="break-all text-2xl font-semibold tracking-tight">{name}</h1>
@@ -220,7 +223,7 @@ export default function ImageDetail({ name }: { name: string }) {
           {repository.tagCount} tags
         </Badge>
         <PullCount count={repository.pullCount} label="Image pull count" />
-        {canWrite && <UploadImageDialog name={name} />}
+        {canWrite && <LogoEditor kind="image" name={name} logoUrl={repository.logoUrl} />}
         {canWrite && (
           <DescriptionEditor kind="image" name={name} description={repository.description} />
         )}

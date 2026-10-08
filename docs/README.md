@@ -14,7 +14,7 @@ In every topology, the public hostname is shared by the UI, `/api/registry/token
 
 ## Reference
 
-Read [Browser uploads and descriptions](uploads.md) for Docker-save/OCI archive imports, multi-platform uploads, replacement confirmation, size limits, and multiline descriptions.
+Read [Photos, logos, and descriptions](logos.md) for visual uploads on projects/repositories, visibility protection, and multiline descriptions.
 
 Read [Image and tag pull counts](pull-counts.md) for the fetch metric definition, aliases, multi-platform handling, notification setup, and counting/privacy guarantees.
 
