@@ -24,6 +24,10 @@ import { toast } from "sonner"
 import { api } from "@/lib/api-client"
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
 import { PullCount, PULL_COUNT_DESCRIPTION } from "@/components/pull-count"
+import { DescriptionEditor } from "@/components/description-editor"
+import { Textarea } from "@/components/ui/textarea"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+import { UploadImageDialog } from "@/components/upload-image-dialog"
 import type { ImageTag, Repository, Visibility } from "@/lib/types"
 import { formatBytes, timeAgo } from "@/lib/utils"
 import { useSession } from "@/hooks/use-session"
@@ -101,11 +105,11 @@ function RepositorySettings({ repository }: { repository: Repository }) {
         >
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
-            <Input
+            <Textarea
               id="description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              maxLength={500}
+              maxLength={MAX_DESCRIPTION_LENGTH}
               placeholder="Describe your image…"
             />
           </div>
@@ -207,7 +211,7 @@ export default function ImageDetail({ name }: { name: string }) {
             <VisibilityBadge visibility={repository.visibility} />
             {repository.legacy && <Badge variant="secondary">Legacy path</Badge>}
           </div>
-          <p className="mt-1.5 text-sm text-muted-foreground">
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
             {repository.description || "A home for your container image."}
           </p>
         </div>
@@ -216,6 +220,10 @@ export default function ImageDetail({ name }: { name: string }) {
           {repository.tagCount} tags
         </Badge>
         <PullCount count={repository.pullCount} label="Image pull count" />
+        {canWrite && <UploadImageDialog name={name} />}
+        {canWrite && (
+          <DescriptionEditor kind="image" name={name} description={repository.description} />
+        )}
       </div>
       <Tabs defaultValue="tags">
         <TabsList className="w-full justify-start">
@@ -276,7 +284,7 @@ export default function ImageDetail({ name }: { name: string }) {
                         <PullCount count={image.pullCount} label={`Pulls for tag ${image.name}`} />
                         <span className="flex items-center gap-1.5">
                           <HardDrive className="size-3.5" />
-                          {formatBytes(image.size)} compressed
+                          {formatBytes(image.size)} stored image data
                         </span>
                         <span className="flex items-center gap-1.5">
                           <Layers3 className="size-3.5" />

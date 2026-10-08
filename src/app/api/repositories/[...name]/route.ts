@@ -14,6 +14,7 @@ import {
 import { withImageResource } from "@/lib/resource-locks"
 import { deleteImageRepository } from "@/lib/resource-deletion"
 import { imagePullCounts } from "@/lib/pull-counts"
+import { resourceSettingsSchema } from "@/lib/resource-settings"
 
 type Context = { params: Promise<{ name: string[] }> }
 export const dynamic = "force-dynamic"
@@ -65,19 +66,14 @@ export async function PATCH(request: Request, context: Context) {
     if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
     const name = (await context.params).name.join("/")
     repositoryPath(name)
-    const input = z
-      .object({
-        description: z.string().trim().max(500),
-        visibility: z.enum(["public", "private"]),
-      })
-      .parse(await jsonBody(request))
+    const input = resourceSettingsSchema.parse(await jsonBody(request))
     await withImageResource(name, async (tx) => {
       const current = await readableRepository(name, user, tx)
       if (current.projectVisibility === "private" && input.visibility === "public")
         throw new HttpError(400, "Images in a private project must be private.")
       await tx
         .insert(repositories)
-        .values({ name, ...input })
+        .values({ name, visibility: current.visibility, ...input })
         .onConflictDoUpdate({ target: repositories.name, set: { ...input, updatedAt: new Date() } })
     })
     await audit(user.username, "repository.update", name, { visibility: input.visibility })

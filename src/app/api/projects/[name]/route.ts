@@ -8,6 +8,7 @@ import { canWrite } from "@/lib/permissions"
 import { readableProject } from "@/lib/projects"
 import { withProjectResource } from "@/lib/resource-locks"
 import { deleteProject } from "@/lib/resource-deletion"
+import { resourceSettingsSchema } from "@/lib/resource-settings"
 
 type Context = { params: Promise<{ name: string }> }
 export const dynamic = "force-dynamic"
@@ -35,17 +36,12 @@ export async function PATCH(request: Request, context: Context) {
     const user = await requireUser()
     if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
     const name = (await context.params).name
-    const input = z
-      .object({
-        description: z.string().trim().max(500),
-        visibility: z.enum(["public", "private"]),
-      })
-      .parse(await jsonBody(request))
+    const input = resourceSettingsSchema.parse(await jsonBody(request))
     await withProjectResource(name, async (tx) => {
-      await readableProject(name, user, tx)
+      const current = await readableProject(name, user, tx)
       await tx
         .insert(projects)
-        .values({ name, ...input })
+        .values({ name, visibility: current.project.visibility, ...input })
         .onConflictDoUpdate({ target: projects.name, set: { ...input, updatedAt: new Date() } })
     })
     await audit(user.username, "project.update", name, { visibility: input.visibility })

@@ -7,6 +7,9 @@ import { ArrowLeft, Box, FolderOpen, Loader2, Search, Settings2 } from "lucide-r
 import { toast } from "sonner"
 import { api } from "@/lib/api-client"
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
+import { DescriptionEditor } from "@/components/description-editor"
+import { Textarea } from "@/components/ui/textarea"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import type { Project, Repository, Visibility } from "@/lib/types"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
 import { RepositoryTable, EmptyRepositories } from "@/components/repository-table"
@@ -61,9 +64,9 @@ function ProjectSettings({ project }: { project: Project }) {
         >
           <div className="space-y-2">
             <Label htmlFor="project-description">Description</Label>
-            <Input
+            <Textarea
               id="project-description"
-              maxLength={500}
+              maxLength={MAX_DESCRIPTION_LENGTH}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
             />
@@ -127,27 +130,34 @@ export default function ProjectPage() {
         All projects
       </Link>
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           <div className="flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-primary/5">
             <FolderOpen className="size-6 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+              <h1 className="break-all text-2xl font-semibold tracking-tight">{project.name}</h1>
               <VisibilityBadge visibility={project.visibility} />
               <Badge variant="secondary">{images.length} images</Badge>
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
               {project.description || `Container images under ${project.name}/…`}
             </p>
           </div>
         </div>
         {canWrite && (
-          <NewRepositoryDialog
-            projectName={project.name}
-            projectVisibility={project.visibility}
-            defaultVisibility={project.visibility}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <DescriptionEditor
+              kind="project"
+              name={project.name}
+              description={project.description}
+            />
+            <NewRepositoryDialog
+              projectName={project.name}
+              projectVisibility={project.visibility}
+              defaultVisibility={project.visibility}
+            />
+          </div>
         )}
       </div>
       <Tabs defaultValue="images">

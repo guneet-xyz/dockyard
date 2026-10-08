@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { createHash, randomBytes, randomUUID } from "node:crypto"
+import { dockerArchive, ociArchive, tarBytes } from "../tests/helpers/image-archives"
 
 // Run against an isolated stack: this creates real users and repositories.
 const app = process.env.TEST_APP_URL ?? "http://localhost:3000"
@@ -1031,6 +1032,263 @@ async function main() {
     401,
     "Anonymous raw catalog blocked",
   )
+  const uploadProject = `upload-${suffix}`
+  const uploadImage = `${uploadProject}/app`
+  const projectDescription = `Release workspace\n${"Long project usage notes. ".repeat(35)}`.trim()
+  const imageDescription =
+    `Container usage\n${"Image documentation and configuration. ".repeat(30)}`.trim()
+  await check(
+    await browser(
+      "/api/projects",
+      "POST",
+      { name: uploadProject, visibility: "public", description: projectDescription },
+      maintainerCookie,
+    ),
+    201,
+    "Create project with a multiline description longer than 500 characters",
+  )
+  await check(
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: uploadImage, visibility: "public" },
+      maintainerCookie,
+    ),
+    201,
+    "Reserve browser upload image",
+  )
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { visibility: "private" },
+      maintainerCookie,
+    ),
+    200,
+    "Partial project settings can change visibility only",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${uploadImage}`,
+      "PATCH",
+      { description: imageDescription },
+      maintainerCookie,
+    ),
+    200,
+    "Description-only image update under a private privacy ceiling",
+  )
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { visibility: "public" },
+      maintainerCookie,
+    ),
+    200,
+    "Reopen project without modifying image visibility",
+  )
+  const preservedDescription = await check(
+    await browser(`/api/repositories/${uploadImage}`),
+    200,
+    "Description-only update did not silently privatize the image",
+  )
+  assert.equal(preservedDescription.repository.description, imageDescription)
+  assert.equal(preservedDescription.repository.visibility, "public")
+  assertions += 2
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { description: projectDescription },
+      maintainerCookie,
+    ),
+    200,
+    "Edit project description without visibility changes",
+  )
+  await check(
+    await browser(`/api/projects/${uploadProject}`, "PATCH", {}, maintainerCookie),
+    400,
+    "Empty settings changes rejected",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${uploadImage}`,
+      "PATCH",
+      { description: "x".repeat(5001) },
+      maintainerCookie,
+    ),
+    400,
+    "Oversized descriptions rejected server-side",
+  )
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { description: "not allowed" },
+      viewerCookie,
+    ),
+    403,
+    "Viewers cannot edit descriptions",
+  )
+  await check(
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      { visibility: "private" },
+      maintainerCookie,
+    ),
+    200,
+    "Browser uploads inherit the image's existing private ceiling",
+  )
+  function uploadUrl(tag: string, expectedDigest?: string) {
+    const url = new URL(`${app}/api/registry/upload`)
+    url.searchParams.set("name", uploadImage)
+    url.searchParams.set("tag", tag)
+    if (expectedDigest) url.searchParams.set("expectedDigest", expectedDigest)
+    return url
+  }
+  async function archiveUpload(
+    bytes: Buffer,
+    tag: string,
+    cookie?: string,
+    expectedDigest?: string,
+    origin = app,
+  ) {
+    return fetch(uploadUrl(tag, expectedDigest), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        Origin: origin,
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      body: new Uint8Array(bytes),
+    })
+  }
+  const dockerSaved = await dockerArchive({ gzip: true })
+  await check(await fetch(uploadUrl("browser")), 401, "Guest cannot preflight an image upload")
+  await check(
+    await fetch(uploadUrl("browser"), { headers: { Cookie: viewerCookie } }),
+    403,
+    "Viewer cannot preflight an image upload",
+  )
+  await check(await archiveUpload(dockerSaved, "browser"), 401, "Guest cannot upload archives")
+  await check(
+    await archiveUpload(dockerSaved, "browser", viewerCookie),
+    403,
+    "Viewer cannot upload archives",
+  )
+  await check(
+    await archiveUpload(dockerSaved, "browser", maintainerCookie, undefined, "http://evil.example"),
+    403,
+    "Cross-origin archive upload rejected",
+  )
+  await check(
+    await archiveUpload(Buffer.from("not an image"), "browser", maintainerCookie),
+    400,
+    "Invalid archives never publish a tag",
+  )
+  await check(
+    await archiveUpload(
+      await tarBytes([{ name: "../escape", bytes: "bad" }]),
+      "browser",
+      maintainerCookie,
+    ),
+    400,
+    "Archive traversal rejected through the actual upload API",
+  )
+  await check(
+    await archiveUpload(dockerSaved, "../bad", maintainerCookie),
+    400,
+    "Invalid destination tags rejected",
+  )
+  const preflightUpload = await check(
+    await fetch(uploadUrl("browser"), { headers: { Cookie: maintainerCookie } }),
+    200,
+    "Upload status reports size limits and no existing tag",
+  )
+  assert.equal(preflightUpload.currentDigest, null)
+  assert.ok(preflightUpload.maxBytes > dockerSaved.length)
+  assertions += 2
+  const uploadedDocker = await check(
+    await archiveUpload(dockerSaved, "browser", maintainerCookie),
+    200,
+    "Maintainer uploads gzip Docker-save archive",
+  )
+  assert.equal(uploadedDocker.format, "docker")
+  assert.deepEqual(uploadedDocker.platforms, ["linux/arm64"])
+  assertions += 2
+  const uploadedDetail = await check(
+    await browser(`/api/repositories/${uploadImage}`, "GET", undefined, viewerCookie),
+    200,
+    "Uploaded image appears with tag and architecture",
+  )
+  assert.equal(
+    uploadedDetail.images.find((image: { name: string }) => image.name === "browser").digest,
+    uploadedDocker.digest,
+  )
+  assert.equal(uploadedDetail.repository.description, imageDescription)
+  assertions += 2
+  await check(
+    await browser(`/api/repositories/${uploadImage}`),
+    404,
+    "Browser upload does not make private images public",
+  )
+  const uploadedPull = await token(`repository:${uploadImage}:pull`, viewer)
+  const dockerManifest = await check(
+    await registryCall(`/v2/${uploadImage}/manifests/browser`, uploadedPull),
+    200,
+    "Actual registry serves uploaded image manifest",
+  )
+  const storedLayer = await registryCall(
+    `/v2/${uploadImage}/blobs/${dockerManifest.layers[0].digest}`,
+    uploadedPull,
+  )
+  assert.equal(storedLayer.status, 200)
+  assert.ok(
+    Buffer.from(await storedLayer.arrayBuffer()).includes(Buffer.from("Uploaded from Dockyard")),
+  )
+  assertions += 2
+  await check(
+    await archiveUpload(dockerSaved, "browser", maintainerCookie),
+    409,
+    "Existing tags require explicit replacement digest",
+  )
+  const uploadedOci = await check(
+    await archiveUpload(
+      await ociArchive({ multi: true }),
+      "browser",
+      maintainerCookie,
+      uploadedDocker.digest,
+    ),
+    200,
+    "Upload multi-platform OCI index with explicit tag replacement",
+  )
+  assert.deepEqual(uploadedOci.platforms, ["linux/amd64", "linux/arm64"])
+  assert.ok(uploadedOci.digest !== uploadedDocker.digest)
+  assertions += 2
+  const ociManifest = await check(
+    await registryCall(`/v2/${uploadImage}/manifests/browser`, uploadedPull),
+    200,
+    "Registry serves uploaded multi-platform index",
+  )
+  assert.equal(ociManifest.manifests.length, 2)
+  assertions++
+  await check(
+    await archiveUpload(dockerSaved, "browser", maintainerCookie, uploadedDocker.digest),
+    409,
+    "Stale tag replacement digest is rejected",
+  )
+  await check(
+    await archiveUpload(await ociArchive({ corrupt: true }), "corrupt", maintainerCookie),
+    400,
+    "OCI digest mismatch rejected before registry writes",
+  )
+  await check(
+    await archiveUpload(await dockerArchive({ multiple: true }), "ambiguous", maintainerCookie),
+    400,
+    "Ambiguous multi-image Docker save rejected",
+  )
+
   const pullProject = `pulls-${suffix}`
   const pullImage = `${pullProject}/app`
   await check(

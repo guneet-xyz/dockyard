@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test"
 import { readFile } from "node:fs/promises"
 import { createHash, randomUUID } from "node:crypto"
+import { dockerArchive, ociArchive } from "../helpers/image-archives"
 
 test("guest can browse without login and has no write controls", async ({ page }) => {
   const errors: string[] = []
@@ -451,6 +452,105 @@ test("image and tag pull counts appear in detail, project lists, and image grids
   const afterBrowsing = await page.request.get(`${base}/api/repositories/${image}`)
   expect(afterBrowsing.status()).toBe(200)
   expect((await afterBrowsing.json()).repository.pullCount).toBe(12)
+})
+
+test("browser archive uploads publish tags and multiline descriptions can be edited without changing visibility", async ({
+  page,
+}) => {
+  test.skip(!process.env.TEST_ADMIN_PASSWORD, "Set TEST_ADMIN_PASSWORD for upload browser checks")
+  const base = process.env.TEST_APP_URL ?? "http://localhost:3000"
+  const origin = { Origin: new URL(base).origin }
+  expect(
+    (
+      await page.request.post(`${base}/api/auth/login`, {
+        headers: origin,
+        data: {
+          username: process.env.TEST_ADMIN_USERNAME ?? "admin",
+          password: process.env.TEST_ADMIN_PASSWORD!,
+        },
+      })
+    ).status(),
+  ).toBe(200)
+  const project = `upload-browser-${Date.now().toString(36)}`
+  const image = `${project}/app`
+  await page.goto("/projects")
+  await page.getByRole("button", { name: "New project", exact: true }).click()
+  await page.getByLabel("Project name", { exact: true }).fill(project)
+  await page
+    .getByLabel("Description", { exact: true })
+    .fill("Project summary\nRelease and deployment notes.")
+  await page.getByRole("button", { name: "Create project", exact: true }).click()
+  await expect(page.getByRole("heading", { name: project, exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Edit description", exact: true }).click()
+  const projectEditor = page.getByRole("dialog", { name: "Project description", exact: true })
+  const projectDescription = "Project notes\n" + "Multiline project documentation. ".repeat(25)
+  await projectEditor.getByLabel("Description", { exact: true }).fill(projectDescription)
+  await projectEditor.getByRole("button", { name: "Save description", exact: true }).click()
+  await expect(page.getByText("Project description saved.", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "New image", exact: true }).click()
+  await page.getByLabel("Image name", { exact: true }).fill("app")
+  await page
+    .getByLabel("Description", { exact: false })
+    .fill("Initial image notes\nPurpose and usage.")
+  await page.getByRole("button", { name: "Create image", exact: true }).click()
+  await expect(page.getByRole("heading", { name: image, exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Edit description", exact: true }).click()
+  const imageEditor = page.getByRole("dialog", { name: "Image description", exact: true })
+  const description = "Image notes\n" + "Environment variables and release guidance. ".repeat(25)
+  await imageEditor.getByLabel("Description", { exact: true }).fill(description)
+  await imageEditor.getByRole("button", { name: "Save description", exact: true }).click()
+  await expect(page.getByText("Image description saved.", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Upload image", exact: true }).click()
+  const dialog = page.getByRole("dialog", { name: "Upload an image archive", exact: true })
+  await dialog.getByLabel("Image archive", { exact: true }).setInputFiles({
+    name: "saved-image.tar.gz",
+    mimeType: "application/gzip",
+    buffer: await dockerArchive({ gzip: true }),
+  })
+  await dialog.getByLabel("Destination tag", { exact: true }).fill("browser-upload")
+  await page.setViewportSize({ width: 320, height: 844 })
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+    true,
+  )
+  await dialog.getByRole("button", { name: "Upload archive", exact: true }).click()
+  await expect(page.getByText("Image uploaded as browser-upload.", { exact: true })).toBeVisible()
+  await expect(page.getByText("browser-upload", { exact: true })).toBeVisible()
+  await page.getByRole("button", { name: "Upload image", exact: true }).click()
+  await dialog.getByLabel("Image archive", { exact: true }).setInputFiles({
+    name: "invalid.tar",
+    mimeType: "application/x-tar",
+    buffer: Buffer.from("invalid archive"),
+  })
+  await dialog.getByLabel("Destination tag", { exact: true }).fill("invalid-upload")
+  await dialog.getByRole("button", { name: "Upload archive", exact: true }).click()
+  await expect(dialog.getByRole("alert")).toContainText("Invalid or truncated")
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await page.getByRole("button", { name: "Upload image", exact: true }).click()
+  await dialog.getByLabel("Image archive", { exact: true }).setInputFiles({
+    name: "multi-platform.tar",
+    mimeType: "application/x-tar",
+    buffer: await ociArchive({ multi: true }),
+  })
+  await dialog.getByLabel("Destination tag", { exact: true }).fill("browser-upload")
+  await dialog.getByRole("button", { name: "Upload archive", exact: true }).click()
+  await expect(dialog.getByRole("alert")).toContainText("This tag already exists")
+  await dialog.getByRole("checkbox", { name: /Replace existing tag/ }).check()
+  await dialog.getByRole("button", { name: "Upload archive", exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const response = await page.request.get(`${base}/api/repositories/${image}`)
+  expect(response.status()).toBe(200)
+  const details = await response.json()
+  expect(details.repository.description).toBe(description.trim())
+  expect(details.repository.visibility).toBe("public")
+  expect(
+    details.images.find((tag: { name: string }) => tag.name === "browser-upload").platforms,
+  ).toEqual(["linux/amd64", "linux/arm64"])
+  expect(details.images.some((tag: { name: string }) => tag.name === "invalid-upload")).toBe(false)
+  await page.request.post(`${base}/api/auth/logout`, { headers: origin })
+  await page.reload()
+  await expect(page.getByRole("button", { name: "Upload image", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Edit description", exact: true })).toHaveCount(0)
 })
 
 test("automation resource selects handle fetch failures and empty collections", async ({

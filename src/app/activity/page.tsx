@@ -28,6 +28,7 @@ const labels: Record<string, string> = {
   "repository.update": "Updated repository",
   "image.delete": "Deleted image",
   "image.push": "Pushed image",
+  "image.upload": "Uploaded image archive",
   "project.create": "Created project",
   "project.update": "Updated project",
   "project.delete": "Deleted project",

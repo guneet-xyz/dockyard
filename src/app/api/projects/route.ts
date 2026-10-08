@@ -9,6 +9,7 @@ import { canWrite } from "@/lib/permissions"
 import { listProjects } from "@/lib/projects"
 import { isNotNull } from "drizzle-orm"
 import { withProjectResource } from "@/lib/resource-locks"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 
 export const dynamic = "force-dynamic"
 
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
         name: z
           .string()
           .refine(validProjectName, "Use a single lowercase project name, e.g. dockyard."),
-        description: z.string().trim().max(500).default(""),
+        description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).default(""),
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))

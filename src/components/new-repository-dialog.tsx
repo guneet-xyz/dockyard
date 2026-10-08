@@ -10,6 +10,8 @@ import type { Visibility } from "@/lib/types"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
+import { Textarea } from "./ui/textarea"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import {
   Dialog,
   DialogContent,
@@ -66,7 +68,7 @@ export function NewRepositoryDialog({
           New image
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create an image</DialogTitle>
           <DialogDescription>
@@ -100,12 +102,12 @@ export function NewRepositoryDialog({
             <Label htmlFor="repository-description">
               Description <span className="text-muted-foreground">(optional)</span>
             </Label>
-            <Input
+            <Textarea
               id="repository-description"
               placeholder="What’s inside this image?"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              maxLength={500}
+              maxLength={MAX_DESCRIPTION_LENGTH}
             />
           </div>
           <div className="space-y-2">

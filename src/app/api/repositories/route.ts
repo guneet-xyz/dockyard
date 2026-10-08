@@ -9,6 +9,7 @@ import { canWrite, validRepositoryName } from "@/lib/permissions"
 import { repositoryIdentity, validImageRepository } from "@/lib/image-names"
 import { listRepositories } from "@/lib/registry"
 import { withImageResource } from "@/lib/resource-locks"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 
 export const dynamic = "force-dynamic"
 
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     const input = z
       .object({
         name: z.string().refine(validRepositoryName, "Invalid repository name."),
-        description: z.string().trim().max(500).default(""),
+        description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).default(""),
         visibility: z.enum(["public", "private"]),
       })
       .parse(await jsonBody(request))

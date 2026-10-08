@@ -6,6 +6,11 @@ import type { SessionUser } from "@/lib/types"
 export function useSession() {
   return useQuery({
     queryKey: ["session"],
-    queryFn: () => api<{ user: SessionUser | null; registryHost: string }>("/api/auth/me"),
+    queryFn: () =>
+      api<{
+        user: SessionUser | null
+        registryHost: string
+        imageUploadLimits: { maxBytes: number; maxExpandedBytes: number }
+      }>("/api/auth/me"),
   })
 }
