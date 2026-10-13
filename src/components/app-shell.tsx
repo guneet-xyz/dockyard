@@ -92,31 +92,34 @@ function Sidebar({ close }: { close?: () => void }) {
           </Link>
         ))}
       </nav>
-      <p className="mb-2 mt-7 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-        Administration
-      </p>
-      <nav aria-label="Administration" className="space-y-1">
-        {[
-          { label: "Access control", href: "/users", icon: Users },
-          { label: "Activity log", href: "/activity", icon: Activity },
-        ].map(({ label, href, icon: Icon }) => (
-          <Link
-            key={href}
-            href={isAdmin ? href : "/guide#permissions"}
-            onClick={close}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] transition-colors",
-              pathname === href
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-            )}
-          >
-            <Icon className="size-[17px]" />
-            {label}
-            {!isAdmin && <ShieldCheck className="ml-auto size-3.5 opacity-40" />}
-          </Link>
-        ))}
-      </nav>
+      {isAdmin && (
+        <>
+          <p className="mb-2 mt-7 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+            Administration
+          </p>
+          <nav aria-label="Administration" className="space-y-1">
+            {[
+              { label: "Access control", href: "/users", icon: Users },
+              { label: "Activity log", href: "/activity", icon: Activity },
+            ].map(({ label, href, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                onClick={close}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] transition-colors",
+                  pathname === href
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-[17px]" />
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </>
+      )}
       <div className="mt-auto pt-10">
         <div className="rounded-lg border border-primary/15 bg-gradient-to-br from-primary/5 to-transparent p-4">
           <ShieldCheck className="mb-3 size-5 text-primary" />

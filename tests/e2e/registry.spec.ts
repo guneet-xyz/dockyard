@@ -9,6 +9,10 @@ test("guest can browse without login and has no write controls", async ({ page }
   await page.goto("/")
   await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
   await expect(page.getByText("Guest access", { exact: true })).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toHaveCount(0)
+  await expect(page.getByText("Administration", { exact: true })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "Access control", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("link", { name: "Activity log", exact: true })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "New image" })).toHaveCount(0)
   await page.getByRole("link", { name: "Browse projects" }).click()
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible()
@@ -29,6 +33,9 @@ test("mobile navigation closes on selection and layout does not overflow", async
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto("/")
   await page.getByRole("button", { name: "Open navigation" }).click()
+  await expect(
+    page.getByRole("dialog").getByRole("navigation", { name: "Administration", exact: true }),
+  ).toHaveCount(0)
   await page.getByRole("dialog").getByRole("link", { name: "Projects", exact: true }).click()
   await expect(page.getByRole("dialog")).toHaveCount(0)
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible()
@@ -52,6 +59,71 @@ test("login form rejects invalid credentials", async ({ page }) => {
   ).toBeVisible()
 })
 
+for (const role of ["viewer", "maintainer"] as const) {
+  test(`${role} has no administration links on desktop or mobile and direct access stays blocked`, async ({
+    page,
+    request,
+  }) => {
+    test.skip(
+      !process.env.TEST_ADMIN_PASSWORD,
+      "Set TEST_ADMIN_PASSWORD for role-based navigation checks",
+    )
+    const base = process.env.TEST_APP_URL ?? "http://localhost:3000"
+    const headers = { Origin: new URL(base).origin }
+    const adminLogin = await request.post(`${base}/api/auth/login`, {
+      headers,
+      data: {
+        username: process.env.TEST_ADMIN_USERNAME ?? "admin",
+        password: process.env.TEST_ADMIN_PASSWORD!,
+      },
+    })
+    expect(adminLogin.status()).toBe(200)
+    const username = `nav-${role}-${Date.now().toString(36)}`
+    const password = `navigation-test-${Date.now().toString(36)}`
+    expect(
+      (
+        await request.post(`${base}/api/users`, {
+          headers,
+          data: { username, password, name: `Navigation ${role}`, role },
+        })
+      ).status(),
+    ).toBe(201)
+    expect(
+      (
+        await page.request.post(`${base}/api/auth/login`, { headers, data: { username, password } })
+      ).status(),
+    ).toBe(200)
+    expect((await (await page.request.get(`${base}/api/auth/me`)).json()).user.role).toBe(role)
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    await page.goto("/")
+    await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+    await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toHaveCount(
+      0,
+    )
+    await expect(page.getByText("Administration", { exact: true })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Access control", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Activity log", exact: true })).toHaveCount(0)
+    await expect(page.getByRole("link", { name: "Automation keys", exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.getByRole("button", { name: "Open navigation", exact: true }).click()
+    const menu = page.getByRole("dialog", { name: "Navigation", exact: true })
+    await expect(menu.getByRole("navigation", { name: "Administration", exact: true })).toHaveCount(
+      0,
+    )
+    await expect(menu.getByRole("link", { name: "Access control", exact: true })).toHaveCount(0)
+    await expect(menu.getByRole("link", { name: "Activity log", exact: true })).toHaveCount(0)
+    await menu.getByRole("link", { name: "Projects", exact: true }).click()
+    await expect(menu).toHaveCount(0)
+    for (const path of ["/users", "/activity"]) {
+      await page.goto(path)
+      await expect(
+        page.getByRole("heading", { name: "Administrator access required", exact: true }),
+      ).toBeVisible()
+      expect((await page.request.get(`${base}/api${path}`)).status()).toBe(403)
+    }
+  })
+}
+
 test("admin signs in, creates a private repository, and sees administration", async ({ page }) => {
   test.skip(
     !process.env.TEST_ADMIN_PASSWORD,
@@ -64,6 +136,22 @@ test("admin signs in, creates a private repository, and sees administration", as
   await page.getByLabel("Password", { exact: true }).fill(process.env.TEST_ADMIN_PASSWORD!)
   await page.getByRole("button", { name: "Sign in", exact: true }).click()
   await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+  await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toBeVisible()
+  await expect(page.getByRole("link", { name: "Access control", exact: true })).toHaveAttribute(
+    "href",
+    "/users",
+  )
+  await expect(page.getByRole("link", { name: "Activity log", exact: true })).toHaveAttribute(
+    "href",
+    "/activity",
+  )
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole("button", { name: "Open navigation", exact: true }).click()
+  const adminMenu = page.getByRole("dialog", { name: "Navigation", exact: true })
+  await expect(adminMenu.getByRole("link", { name: "Access control", exact: true })).toBeVisible()
+  await expect(adminMenu.getByRole("link", { name: "Activity log", exact: true })).toBeVisible()
+  await adminMenu.getByRole("link", { name: "Overview", exact: true }).click()
+  await page.setViewportSize({ width: 1440, height: 1000 })
   await page.getByRole("button", { name: "New project" }).click()
   const project = `browser-${Date.now().toString(36)}`
   const name = `${project}/private-app`
