@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/guneet-xyz/dockyard/compare/v0.1.0...v0.2.0) (2026-10-13)
+
+
+### Features
+
+* delete image repositories and projects with typed confirmation ([02831c6](https://github.com/guneet-xyz/dockyard/commit/02831c6b261e5607a2235f5e6817a28749d2fec0))
+* track and display image and tag pull counts ([bd2d60c](https://github.com/guneet-xyz/dockyard/commit/bd2d60c0d65b6b8d25805fe8efe9500e58090670))
+* upload container image archives and edit multiline descriptions ([7f20c93](https://github.com/guneet-xyz/dockyard/commit/7f20c93bb7dce16dae44713b895b30a811c057f1))
+
+
+### Bug Fixes
+
+* **ci:** bind publishing credentials directly to release environment ([d830468](https://github.com/guneet-xyz/dockyard/commit/d8304687983385a061174682638ab4ee40386c15))
+* **ci:** declare release environment credentials in reusable publisher ([c2fe59c](https://github.com/guneet-xyz/dockyard/commit/c2fe59c8e257a424adfe2ad731ece9803516e302))
+* **ci:** generate release metadata from the explicit source SHA ([be2f771](https://github.com/guneet-xyz/dockyard/commit/be2f771fa97f93953b927f758855c64d7a75aec4))
+* **ci:** verify scoped push permissions before building images ([6985716](https://github.com/guneet-xyz/dockyard/commit/6985716d77cc6287fb2c2597c821460a1b5c4523))
+* hide administration navigation from non-admin users ([b3f1753](https://github.com/guneet-xyz/dockyard/commit/b3f175385aa4377267b3892c367c4225f093f232))
+* replace archive uploads with project and repository photos ([085322a](https://github.com/guneet-xyz/dockyard/commit/085322a8e111f21f9f3c1c8b56ddb9ce64d24ff4))
+
 ## 0.1.0 (2026-10-03)
 
 
