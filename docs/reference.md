@@ -6,7 +6,7 @@ For step-by-step deployment recipes, see [build setup](deployment/build.md), [tw
 
 ## What’s included
 
-- Responsive dark UI, dashboard, searchable repository list/grid, and tag search with pagination.
+- Responsive dark UI, an Explore homepage of popular public projects/images, searchable repository list/grid, and tag search with pagination.
 - Real registry data: image digests, compressed sizes, platforms, build timestamps, and copyable pull commands. No simulated repositories or metrics.
 - Anonymous browsing and pulling of **public** images by default.
 - Username/password login with opaque, database-backed, HttpOnly sessions.

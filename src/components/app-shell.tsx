@@ -12,10 +12,10 @@ import {
   ChevronRight,
   CircleHelp,
   Command,
+  Compass,
   ExternalLink,
   FolderOpen,
   KeyRound,
-  LayoutDashboard,
   LogIn,
   LogOut,
   Menu,
@@ -40,7 +40,7 @@ import {
 } from "./ui/dropdown-menu"
 
 const navigation = [
-  { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Explore", href: "/", icon: Compass },
   { label: "Projects", href: "/projects", icon: FolderOpen },
   { label: "Images", href: "/repositories", icon: Box },
   { label: "Automation keys", href: "/keys", icon: KeyRound },
@@ -166,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const user = data?.user
   const title =
     pathname === "/"
-      ? "Overview"
+      ? "Explore"
       : pathname.startsWith("/repositories")
         ? "Images"
         : pathname.startsWith("/projects")

@@ -40,6 +40,12 @@ The project/image prefix stays intact through ingress and Distribution. Image pa
 
 Creating an image using the full `project/image` path can create an unconfigured project with the registry's default visibility. A successful CLI manifest push also records its project if it is not yet configured. To avoid any public exposure, create a private project **before** the first push, or use a private registry default.
 
+## Explore homepage
+
+The homepage (`/`, **Explore** in the navigation) showcases the most popular **public** projects and images, ranked by [pull count](pull-counts.md), then tag count, then name. It is the same for guests and signed-in users: rankings are always computed from the anonymous view (`GET /api/popular`), so private projects, private images inside public projects, and their pulls never appear or contribute to totals. Projects without images and images without tags are left out.
+
+Your own workspace, including private projects and the **New project** action, lives on **Projects**.
+
 ## Visibility and roles
 
 - **Public project:** guests can see its public images; individually private images stay hidden.

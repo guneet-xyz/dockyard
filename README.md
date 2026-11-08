@@ -4,6 +4,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 
 ## Features
 
+- An **Explore** homepage that showcases the most-pulled public projects and images.
 - Searchable repositories and image tags, platform/digest details, and copyable Docker commands.
 - Projects with images under exactly `project/image`, such as `dockyard/init` and `dockyard/web`.
 - Confirmed deletion of complete images/projects, with privacy-preserving deletion markers.

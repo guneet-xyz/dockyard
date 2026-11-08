@@ -1,6 +1,6 @@
 # Image and tag pull counts
 
-Dockyard shows **Pulls** for every image in the image list/grid and project image tables, plus a total on the image detail page and a separate count on every tag card. **Most pulls** sorts the image browser by its total. Counters refresh with registry metadata (once per minute while the page is active); reload to see a newly delivered event sooner.
+Dockyard shows **Pulls** for every image in the image list/grid and project image tables, ranks the [Explore homepage](projects.md#explore-homepage) by public project/image totals, plus a total on the image detail page and a separate count on every tag card. **Most pulls** sorts the image browser by its total. Counters refresh with registry metadata (once per minute while the page is active); reload to see a newly delivered event sooner.
 
 ## What a pull means
 

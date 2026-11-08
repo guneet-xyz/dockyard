@@ -7,12 +7,17 @@ test("guest can browse without login and has no write controls", async ({ page }
   const errors: string[] = []
   page.on("pageerror", (error) => errors.push(error.message))
   await page.goto("/")
-  await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "Popular on Dockyard", exact: true }),
+  ).toBeVisible()
   await expect(page.getByText("Guest access", { exact: true })).toBeVisible()
   await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toHaveCount(0)
   await expect(page.getByText("Administration", { exact: true })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Access control", exact: true })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Activity log", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("heading", { name: "Popular projects", exact: true })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Popular images", exact: true })).toBeVisible()
+  await expect(page.getByRole("button", { name: "New project" })).toHaveCount(0)
   await expect(page.getByRole("button", { name: "New image" })).toHaveCount(0)
   await page.getByRole("link", { name: "Browse projects" }).click()
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible()
@@ -96,7 +101,9 @@ for (const role of ["viewer", "maintainer"] as const) {
     expect((await (await page.request.get(`${base}/api/auth/me`)).json()).user.role).toBe(role)
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.goto("/")
-    await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+    await expect(
+      page.getByRole("heading", { name: "Popular on Dockyard", exact: true }),
+    ).toBeVisible()
     await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toHaveCount(
       0,
     )
@@ -135,7 +142,9 @@ test("admin signs in, creates a private repository, and sees administration", as
     .fill(process.env.TEST_ADMIN_USERNAME ?? "admin")
   await page.getByLabel("Password", { exact: true }).fill(process.env.TEST_ADMIN_PASSWORD!)
   await page.getByRole("button", { name: "Sign in", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "Popular on Dockyard", exact: true }),
+  ).toBeVisible()
   await expect(page.getByRole("navigation", { name: "Administration", exact: true })).toBeVisible()
   await expect(page.getByRole("link", { name: "Access control", exact: true })).toHaveAttribute(
     "href",
@@ -150,7 +159,7 @@ test("admin signs in, creates a private repository, and sees administration", as
   const adminMenu = page.getByRole("dialog", { name: "Navigation", exact: true })
   await expect(adminMenu.getByRole("link", { name: "Access control", exact: true })).toBeVisible()
   await expect(adminMenu.getByRole("link", { name: "Activity log", exact: true })).toBeVisible()
-  await adminMenu.getByRole("link", { name: "Overview", exact: true }).click()
+  await adminMenu.getByRole("link", { name: "Projects", exact: true }).click()
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.getByRole("button", { name: "New project" }).click()
   const project = `browser-${Date.now().toString(36)}`
@@ -189,7 +198,10 @@ test("automation key can be rotated, downloaded once, and revoked", async ({ pag
     .fill(process.env.TEST_ADMIN_USERNAME ?? "admin")
   await page.getByLabel("Password", { exact: true }).fill(process.env.TEST_ADMIN_PASSWORD!)
   await page.getByRole("button", { name: "Sign in", exact: true }).click()
-  await expect(page.getByRole("heading", { name: "A home for your containers." })).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "Popular on Dockyard", exact: true }),
+  ).toBeVisible()
+  await page.getByRole("link", { name: "Your projects" }).click()
   await page.getByRole("button", { name: "New project" }).click()
   const suffix = Date.now().toString(36)
   const project = `key-browser-${suffix}`
