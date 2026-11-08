@@ -41,6 +41,7 @@ export function summarizeProjects(
         updatedAt: row.updatedAt.toISOString(),
         imageCount: 0,
         tagCount: 0,
+        pullCount: 0,
       })
   }
   for (const image of images) {
@@ -55,12 +56,14 @@ export function summarizeProjects(
         updatedAt: image.updatedAt,
         imageCount: 0,
         tagCount: 0,
+        pullCount: 0,
       }
       if (!canRead(user, project.visibility)) continue
       byName.set(project.name, project)
     }
     project.imageCount++
     project.tagCount += image.tagCount
+    project.pullCount += image.pullCount
     if (image.updatedAt && (!project.updatedAt || image.updatedAt > project.updatedAt))
       project.updatedAt = image.updatedAt
   }

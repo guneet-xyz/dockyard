@@ -46,6 +46,7 @@ export type Project = {
   visibility: Visibility
   imageCount: number
   tagCount: number
+  pullCount: number
   updatedAt: string | null
 }
 export type ProjectOverview = {
@@ -54,6 +55,14 @@ export type ProjectOverview = {
   registryHost: string
   defaultVisibility: Visibility
   canWrite: boolean
+}
+export type PopularOverview = {
+  projects: Project[]
+  images: Repository[]
+  publicProjectCount: number
+  publicImageCount: number
+  publicPullCount: number
+  registryHost: string
 }
 export type ImageTag = {
   name: string
