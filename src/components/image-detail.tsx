@@ -407,8 +407,9 @@ export default function ImageDetail({ name }: { name: string }) {
                     </span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Counts external tag fetches since tracking was enabled, not verified completed
-                    downloads. Digest-only pulls and internal UI reads are excluded.
+                    Counts external tag lookups since tracking was enabled, not verified completed
+                    downloads. Repeats by one client within a minute count once; digest-only pulls
+                    and internal UI reads are excluded.
                   </p>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Format</span>

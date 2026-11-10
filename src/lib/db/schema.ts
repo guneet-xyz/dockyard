@@ -114,6 +114,17 @@ export const registryPullEvents = pgTable("registry_pull_events", {
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 })
 
+// Short-lived per-client windows that collapse repeated tag lookups into one pull.
+// The key is a keyed hash; rows are pruned shortly after their window closes.
+export const registryPullWindows = pgTable(
+  "registry_pull_windows",
+  {
+    key: text("key").primaryKey(),
+    countedAt: timestamp("counted_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [index("registry_pull_windows_counted_idx").on(table.countedAt)],
+)
+
 export const auditEvents = pgTable(
   "audit_events",
   {

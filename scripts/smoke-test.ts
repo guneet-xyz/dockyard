@@ -1354,7 +1354,7 @@ async function main() {
   await check(
     await registryCall(`/v2/${pullImage}/manifests/latest`, externalPull, "HEAD"),
     200,
-    "HEAD probe does not count",
+    "HEAD tag lookup counts (Docker and containerd resolve tags this way)",
   )
   await check(
     await registryCall(`/v2/${pullImage}/manifests/${pullChild}`, externalPull),
@@ -1370,7 +1370,7 @@ async function main() {
     await check(
       await registryCall(`/v2/${pullImage}/manifests/${tag}`, externalPull),
       200,
-      "Real external tagged manifest pull",
+      "Repeated tag lookups by the same client within a minute count once",
     )
   async function waitForPulls(total: number) {
     const end = Date.now() + 15000
@@ -1389,10 +1389,10 @@ async function main() {
     )
     return detail
   }
-  const countedPulls = await waitForPulls(3)
+  const countedPulls = await waitForPulls(2)
   assert.equal(
     countedPulls.images.find((image: { name: string }) => image.name === "latest").pullCount,
-    2,
+    1,
   )
   assert.equal(
     countedPulls.images.find((image: { name: string }) => image.name === "stable").pullCount,
@@ -1406,7 +1406,7 @@ async function main() {
   )
   assert.equal(
     pullOverview.repositories.find((image: { name: string }) => image.name === pullImage).pullCount,
-    3,
+    2,
   )
   assertions++
   if (process.env.REGISTRY_WEBHOOK_SECRET) {
@@ -1455,7 +1455,7 @@ async function main() {
         check(await sendPullEvents([event]), 200, "Concurrent unique pulls increment atomically"),
       ),
     )
-    const atomic = await waitForPulls(13)
+    const atomic = await waitForPulls(12)
     assert.equal(
       atomic.images.find((image: { name: string }) => image.name === "stable").pullCount,
       11,
@@ -1477,24 +1477,53 @@ async function main() {
       "Republish a tag without resetting its named pull history",
     )
     assert.equal(
+      (await waitForPulls(12)).images.find((image: { name: string }) => image.name === "latest")
+        .pullCount,
+      1,
+    )
+    assertions++
+    const lookupTime = Date.now()
+    const clientLookup = (addr: string, method: string, offset: number) => ({
+      ...pullEvent,
+      id: randomUUID(),
+      timestamp: new Date(lookupTime + offset).toISOString(),
+      request: { addr, method, useragent: "containerd/test" },
+      target: {
+        ...pullEvent.target,
+        tag: "latest",
+        digest: `sha256:${createHash("sha256").update(republishedIndex).digest("hex")}`,
+      },
+    })
+    await check(
+      await sendPullEvents([
+        clientLookup("198.51.100.7:40001", "HEAD", 0),
+        clientLookup("198.51.100.7:40002", "GET", 1000),
+      ]),
+      200,
+      "One client's HEAD then GET of the replacement tag is one pull",
+    )
+    assert.equal(
       (await waitForPulls(13)).images.find((image: { name: string }) => image.name === "latest")
         .pullCount,
       2,
     )
     assertions++
     await check(
-      await registryCall(`/v2/${pullImage}/manifests/latest`, externalPull),
+      await sendPullEvents([
+        clientLookup("198.51.100.7:40003", "HEAD", 61000),
+        clientLookup("198.51.100.8:40001", "HEAD", 2000),
+      ]),
       200,
-      "Pull the replacement tag content",
+      "Lookups after the window or from another client count again",
     )
     assert.equal(
-      (await waitForPulls(14)).images.find((image: { name: string }) => image.name === "latest")
+      (await waitForPulls(15)).images.find((image: { name: string }) => image.name === "latest")
         .pullCount,
-      3,
+      4,
     )
     assertions++
     const ignoredPulls = [
-      { ...pullEvent, id: randomUUID(), request: { method: "HEAD" } },
+      { ...pullEvent, id: randomUUID(), request: { method: "DELETE" } },
       {
         ...pullEvent,
         id: randomUUID(),
@@ -1510,9 +1539,9 @@ async function main() {
     await check(
       await sendPullEvents(ignoredPulls),
       200,
-      "Ignore internal, HEAD, digest-only and blob notifications",
+      "Ignore internal, non-lookup, digest-only and blob notifications",
     )
-    assert.equal((await waitForPulls(14)).repository.pullCount, 14)
+    assert.equal((await waitForPulls(15)).repository.pullCount, 15)
     assertions++
     await check(
       await browser(

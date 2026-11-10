@@ -9,7 +9,7 @@ import { apiError, HttpError } from "@/lib/http"
 import { validRepositoryName } from "@/lib/permissions"
 import { withImageResource } from "@/lib/resource-locks"
 import { registryEventSchema } from "@/lib/registry-events"
-import { recordPull } from "@/lib/pull-counts"
+import { pruneRecentPulls, recordPull } from "@/lib/pull-counts"
 
 const eventSchema = z.object({
   events: z.array(registryEventSchema).max(500),
@@ -27,8 +27,10 @@ export async function POST(request: Request) {
     const text = await request.text()
     if (text.length > 1024 * 1024) throw new HttpError(413, "Notification is too large.")
     const { events } = eventSchema.parse(JSON.parse(text))
+    let pulls = false
     for (const event of events) {
       if (event.action === "pull") {
+        pulls = true
         await recordPull(event)
         continue
       }
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
           })
       })
     }
+    if (pulls) await pruneRecentPulls()
     return NextResponse.json({ ok: true })
   } catch (error) {
     return apiError(error)

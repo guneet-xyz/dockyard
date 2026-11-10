@@ -4,14 +4,18 @@ Dockyard shows **Pulls** for every image in the image list/grid and project imag
 
 ## What a pull means
 
-A counted pull is one authenticated registry notification for an **external GET of a manifest by tag**. Anonymous public pulls, user-account pulls, and scoped-key pulls use the same definition. The registry's notification `target.tag` identifies the requested tag.
+A counted pull is one authenticated registry notification for an **external tag lookup**: a `GET` or `HEAD` of a manifest by tag. Anonymous public pulls, user-account pulls, and scoped-key pulls use the same definition. The registry's notification `target.tag` identifies the requested tag.
 
-This is an observed fetch metric, **not a verified completed Docker/OCI download**, unique-user count, or billing-grade analytics:
+Both methods count because clients resolve tags differently. Docker and containerd-based clients (Kubernetes, nerdctl, BuildKit) send `HEAD` for the tag and then fetch the manifest **by digest**, so they never issue a tagged `GET`; tools such as crane and skopeo `GET` the tag directly. Some clients do both.
 
-- A client may fetch a tag more than once for one workflow; those are separate observed events. Notifications do not report whether every layer was downloaded successfully.
-- **HEAD checks do not count.** Docker, Buildx, and deployment tools can probe manifests while checking versions or pushing images.
+**Repeated lookups collapse into one pull.** Lookups of the same image tag by the same client within **60 seconds** count once. A client is identified by the address the registry reports, its user agent, and its account (anonymous, user, or key). Requests without a reported client address are not merged.
+
+This is an observed lookup metric, **not a verified completed Docker/OCI download**, unique-user count, or billing-grade analytics:
+
+- **"Already up to date" pulls count.** A `docker pull` or `docker compose pull` of an unchanged tag still looks the tag up; so do update checkers and deployment tools that poll a tag (at most once per minute per client and tag). Notifications do not report whether every layer was downloaded successfully.
+- **Distinct clients can merge.** When a reverse proxy in front of Dockyard's ingress hides client addresses, different clients with the same user agent and account that look up the same tag within one window count once.
 - **Blob/config/layer transfers do not count.** Cached images do not need to download every blob anyway.
-- **Digest-only manifest requests do not count**, including the platform-specific child manifests fetched after a multi-platform index. A typical tagged multi-platform pull therefore counts its tagged index lookup once, rather than adding every child. Workflows pinned only to `@sha256:…` are not included in this metric.
+- **Digest-only manifest requests do not count**, including the platform-specific child manifests fetched after a multi-platform index. A tagged multi-platform pull therefore counts its tag lookup once, rather than adding every child. Workflows pinned only to `@sha256:…` are not included in this metric.
 - Dockyard marks its internal registry requests with `User-Agent: Dockyard/internal`. Browsing the UI, inspecting image sizes/platforms, and deletion planning do not count as client pulls.
 - Only the four supported OCI/Docker manifest/index media types are eligible. Missing method/tag/digest data and invalid names are ignored rather than guessed.
 
@@ -19,7 +23,7 @@ Two tags that share a digest have independent counts: pulling `latest` does not 
 
 ## Collection and upgrade
 
-The migration job creates `image_tag_pulls` for counters and `registry_pull_events` for notification receipts, plus nullable reset timestamps on images/projects. Existing images, projects, credentials, and deletion markers remain unchanged. Existing counters start at **zero**: historical pulls were not recorded and cannot be reconstructed from Distribution's catalog.
+The migration job creates `image_tag_pulls` for counters and `registry_pull_events` for notification receipts, plus nullable reset timestamps on images/projects. A later migration adds `registry_pull_windows` for the 60-second per-client windows. Existing images, projects, credentials, and deletion markers remain unchanged. Existing counters start at **zero**: historical pulls were not recorded and cannot be reconstructed from Distribution's catalog. Counters collected before tag lookups by `HEAD` were counted (releases up to 0.2.0) miss most Docker and containerd pulls; that history cannot be corrected.
 
 The base Compose configuration now enables pull notifications to the existing internal `/api/registry/events` endpoint, authenticated with `REGISTRY_WEBHOOK_SECRET`. Common octet-stream blob notifications are filtered by Distribution, and the receiver filters remaining non-countable events. **No new secret, public endpoint, external analytics service, or proxy authorization substitution is required.**
 
@@ -33,15 +37,15 @@ docker compose --env-file .env \
 
 For prebuilt deployments, use a version containing this feature, run the normal pull/upgrade procedure, and let the migration job finish before web starts. Keep existing secrets and volumes.
 
-If using a separately managed Distribution service, keep the existing Dockyard notification endpoint and authentication header but remove any `ignore.actions: [pull]` setting. The registry must send the request method/user agent and manifest tag/digest information supported by the bundled Distribution version. Internal Dockyard requests must reach Distribution without a proxy replacing their user-agent marker.
+If using a separately managed Distribution service, keep the existing Dockyard notification endpoint and authentication header but remove any `ignore.actions: [pull]` setting. The registry must send the request method/address/user agent and manifest tag/digest information supported by the bundled Distribution version. Internal Dockyard requests must reach Distribution without a proxy replacing their user-agent marker.
 
 ## Reliability and privacy
 
-Counter increments use an atomic PostgreSQL upsert. A registry event ID is recorded in the **same transaction** as its counter update, so retrying the same event (including concurrent deliveries or duplicate IDs within a batch) increments only once. A failed transaction can be safely retried.
+Counter increments use an atomic PostgreSQL upsert. A registry event ID is recorded in the **same transaction** as its counter update, so retrying the same event (including concurrent deliveries or duplicate IDs within a batch) increments only once. A failed transaction can be safely retried. The per-client window is claimed in that same transaction with a conditional upsert, so concurrent lookups by one client still count once. Windows use the registry's event timestamps; a notification delivered more than about ten minutes late may count again after its window has been pruned.
 
 Notifications are asynchronous and retried by Distribution, so displayed counts may lag behind requests. Distribution's queue is in memory; events can be lost during registry restarts or prolonged outages. There is no backfill for missed events. Do not interpret these counters as an exact number of completed downloads.
 
-Receipts store only the event UUID and receipt time; counters store the image path, tag, and aggregate number. Client IPs, user agents, account identities, credentials, and bearer tokens are not retained for pull analytics. Receipt IDs are retained for deduplication; pull events do not flood the activity audit log.
+Receipts store only the event UUID and receipt time; counters store the image path, tag, and aggregate number. Client IPs, user agents, account identities, credentials, and bearer tokens are not retained for pull analytics. Deduplication windows store only a keyed hash (HMAC with `REGISTRY_WEBHOOK_SECRET`) of the client address, user agent, account, image, and tag, plus the window time; they are deleted about ten minutes after they close. Receipt IDs are retained for deduplication; pull events do not flood the activity audit log.
 
 Counts follow the existing visibility rules. Guest users cannot discover private image/project counts. Deleted images/projects remain hidden, and late pulls while a resource is retired do not update or revive it. Explicitly recreating an image clears its old tag counters; reset timestamps reject delayed pre-recreation events, and old event IDs remain deduplicated. Coordinate clocks across registry/web nodes when operating multiple machines.
 
