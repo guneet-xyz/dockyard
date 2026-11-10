@@ -8,7 +8,7 @@ A self-hosted Docker / OCI registry with a polished Next.js + shadcn UI, Postgre
 - Searchable repositories and image tags, platform/digest details, and copyable Docker commands.
 - Projects with images under exactly `project/image`, such as `dockyard/init` and `dockyard/web`.
 - Confirmed deletion of complete images/projects, with privacy-preserving deletion markers.
-- Image and tag pull counts from external tagged-manifest notifications, without counting UI reads.
+- Image and tag pull counts from external tag-lookup notifications, without counting UI reads.
 - Project and repository photo/logo uploads, with multiline descriptions.
 - Public guest pulls and authenticated access to private repositories.
 - Viewer, maintainer, and admin roles; user management and audit history.

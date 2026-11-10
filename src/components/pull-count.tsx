@@ -2,7 +2,7 @@ import { Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const PULL_COUNT_DESCRIPTION =
-  "External tagged-manifest fetch notifications since tracking was enabled; not verified completed downloads. Excludes UI reads, HEAD checks, blobs, and digest-only/multi-platform child fetches."
+  "Tag lookups (GET or HEAD of a manifest by tag) since tracking was enabled; repeats by one client within a minute count once. Not verified completed downloads. Excludes UI reads, blobs, and digest-only/multi-platform child fetches."
 
 export function PullCount({
   count,
