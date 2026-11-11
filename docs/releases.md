@@ -52,25 +52,26 @@ Only the built-in `GITHUB_TOKEN` is used for GitHub release operations; no PAT o
 
 For a stable `v1.2.3` release, each of the four images receives:
 
-| Image tag                            | Meaning                                                                |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| `v1.2.3`                             | Full stable version, matching the Git tag; use it for every service.   |
-| `v1.2`                               | Latest stable patch in that minor line.                                |
-| `v1`                                 | Latest stable release in that major line (no `v0` alias is generated). |
-| `latest`                             | Most recently published stable release.                                |
-| `sha-<full-40-character-commit-sha>` | Traceable source revision.                                             |
+| Image tag | Meaning                                                                |
+| --------- | ---------------------------------------------------------------------- |
+| `v1.2.3`  | Full stable version, matching the Git tag; use it for every service.   |
+| `v1.2`    | Latest stable patch in that minor line.                                |
+| `v1`      | Latest stable release in that major line (no `v0` alias is generated). |
+| `latest`  | Most recently published stable release.                                |
 
-Version tags always carry the `v` prefix; no unprefixed copies (`1.2.3`, `1.2`, `1`) are published. Tags published before this rule, such as `0.1.0`, `0.2.0`, and `0.2`, remain in the registry and are not retagged.
+These are the only tags. Version tags always carry the `v` prefix; no unprefixed copies (`1.2.3`, `1.2`, `1`) are published. There are no `edge`, `sha-…`, PR, feature-branch, `local`, or prerelease image tags.
 
-Successful development runs on `main` receive `edge` and the full SHA tag, **not** `latest` or the package's not-yet-released version. `edge` is updated only for the tested commit that triggered that main run, never for an older release discovered by Release Please. No PR, feature-branch, `local`, or prerelease image tags are published by this workflow.
+**Images are published only from releases.** A push to `main` that does not create a release runs only Release Please (and CI dispatch for its release PR); nothing is built, tested for publication, or pushed.
+
+Tags published under earlier rules stay in the registry and are not retagged or deleted: unprefixed versions such as `0.1.0`, `0.2.0`, and `0.2`, plus `edge` and `sha-<commit>` tags from former development builds of `main`. `edge` and `sha-…` are no longer updated, so do not use them.
 
 ## How images are built, tested, and tagged
 
-After full CI passes on the exact source commit, **Release and publish** runs three stages:
+When Release Please creates a release, and after full CI passes on the exact release commit, **Release and publish** runs three stages:
 
 1. **Build:** each Dockerfile target is built separately for each platform on a native runner (`ubuntu-24.04` for `linux/amd64`, `ubuntu-24.04-arm` for `linux/arm64`), with at most four builds in parallel. Each build is pushed **by digest only**, with its SBOM and provenance attestations, so no tag points to it yet.
 2. **Smoke test:** for each platform, on its native runner, the four pushed digests are pulled and started together as the `deploy/compose.yaml` stack (using a local-only `DOCKYARD_IMAGE_PREFIX`/`DOCKYARD_IMAGE_TAG` and `--pull never`, so nothing else can be substituted). The stack must become healthy, `init` and `migrate` must exit successfully, and the registry integration and Docker CLI push/pull checks from CI must pass against it.
-3. **Tag:** only after both platforms pass, each image's two tested digests are combined with `docker buildx imagetools create` into one multi-architecture index carrying all of its tags (including `edge`). The run summary records each image's index digest and tags.
+3. **Tag:** only after both platforms pass, each image's two tested digests are combined with `docker buildx imagetools create` into one multi-architecture index carrying all of its tags. The run summary records each image's index digest and tags.
 
 Publication is serialized across release runs and is not canceled halfway through. A registry cannot atomically update tags across four repositories, so **wait for the entire workflow to succeed** before upgrading, and pin a full version (preferably with its digest) rather than treating floating aliases as an atomic deployment.
 

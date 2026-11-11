@@ -103,7 +103,7 @@ Refresh the repository browser to see the pushed image. Public pulls work withou
 
 ## Using prebuilt images
 
-CI publishes all four images under `cr.guneet.dev/dockyard/` for `linux/amd64` and `linux/arm64`. See [CI/CD and releases](../releases.md) for the release/tag policy. In `.env`, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an existing full released version, matching the Git tag (for example `v1.2.3`). Pin a full version in production rather than `latest`, `edge`, or an alias such as `v1.2`, and wait for the entire publication workflow to finish successfully.
+CI publishes all four images under `cr.guneet.dev/dockyard/` for `linux/amd64` and `linux/arm64`. See [CI/CD and releases](../releases.md) for the release/tag policy. In `.env`, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an existing full released version, matching the Git tag (for example `v1.2.3`). Pin a full version in production rather than `latest` or an alias such as `v1.2`, and wait for the entire publication workflow to finish successfully.
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml pull

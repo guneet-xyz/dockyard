@@ -1,7 +1,8 @@
 name: Release and publish
 
-# No manual trigger: images are published only from main after full CI. Recover
-# a failed publication with "Re-run failed jobs" (see docs/releases.md).
+# No manual trigger. Images are published only when Release Please creates a
+# release, from the exact release commit after full CI. Recover a failed
+# publication with "Re-run failed jobs" (see docs/releases.md).
 on:
   push:
     branches: [main]
@@ -25,9 +26,9 @@ jobs:
       pull-requests: write
       actions: write
     outputs:
+      release: ${{ steps.source.outputs.release }}
       sha: ${{ steps.source.outputs.sha }}
       version: ${{ steps.source.outputs.version }}
-      edge: ${{ steps.source.outputs.edge }}
     steps:
       - name: Maintain the conventional-commit release PR and create merged releases
         id: release
@@ -48,10 +49,12 @@ jobs:
           branch=$(node -e 'const prs = JSON.parse(process.env.RELEASE_PRS); if (prs.length !== 1 || !prs[0].headBranchName) throw new Error("Expected one release PR"); console.log(prs[0].headBranchName)')
           gh workflow run ci.yml --ref "$branch"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.release.outputs.release_created == 'true'
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Resolve the exact source commit and publication tags
+      # Pushes that do not create a release stop here: nothing is built or published.
+      - name: Resolve the exact release commit and version
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,35 +62,29 @@ jobs:
           RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
           RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
-          SOURCE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          sha="$SOURCE_SHA"
-          version=""
-          edge=true
-          if [ "$RELEASE_CREATED" = true ]; then
-            [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "Expected a stable vMAJOR.MINOR.PATCH release tag" >&2; exit 1; }
-            gh release view "$RELEASE_TAG" --json tagName > /dev/null
-            tagged_sha=$(git rev-parse --verify "$RELEASE_TAG^{commit}")
-            if [ "$tagged_sha" != "$RELEASE_SHA" ]; then
-              echo "Release tag and Release Please source do not agree" >&2
-              exit 1
-            fi
-            git merge-base --is-ancestor "$tagged_sha" origin/main
-            sha="$tagged_sha"
-            version="${RELEASE_TAG#v}"
-            # Release Please may find a merged release older than this push.
-            # Never label that older source as the current main development build.
-            if [ "$sha" != "$SOURCE_SHA" ]; then edge=false; fi
+          if [ "$RELEASE_CREATED" != true ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "Expected a stable vMAJOR.MINOR.PATCH release tag" >&2; exit 1; }
+          gh release view "$RELEASE_TAG" --json tagName > /dev/null
+          sha=$(git rev-parse --verify "$RELEASE_TAG^{commit}")
+          if [ "$sha" != "$RELEASE_SHA" ]; then
+            echo "Release tag and Release Please source do not agree" >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$sha" origin/main
           {
+            echo "release=true"
             echo "sha=$sha"
-            echo "version=$version"
-            echo "edge=$edge"
+            echo "version=${RELEASE_TAG#v}"
           } >> "$GITHUB_OUTPUT"
 
   checks:
     needs: prepare
+    if: needs.prepare.outputs.release == 'true'
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ needs.prepare.outputs.sha }}
@@ -97,6 +94,7 @@ jobs:
   build:
     name: Build ${{ matrix.target }} (${{ matrix.platform }})
     needs: [prepare, checks]
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ${{ matrix.runner }}
     # Resolve deployment credentials directly in this environment-bound job.
     environment: release
@@ -130,7 +128,7 @@ jobs:
             echo "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment" >&2
             exit 1
           fi
-          node -e 'const version = process.env.RELEASE_VERSION; if (version && (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) || require("./package.json").version !== version)) throw new Error("Release version must match package.json")'
+          node -e 'const version = process.env.RELEASE_VERSION; if (!version || (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version) || require("./package.json").version !== version)) throw new Error("Release version must match package.json")'
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to the Dockyard registry
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -175,18 +173,16 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          # Release checkouts intentionally use a detached exact SHA. Keep
-          # workflow context and supply source-derived metadata explicitly.
+          # The release checkout is a detached exact SHA. Keep workflow
+          # context and supply source-derived metadata explicitly.
           context: workflow
           images: cr.guneet.dev/dockyard/${{ matrix.target }}
           flavor: latest=false
           tags: |
-            type=raw,value=sha-${{ needs.prepare.outputs.sha }},priority=100
-            type=raw,value=edge,enable=${{ needs.prepare.outputs.edge == 'true' }}
-            type=semver,pattern=v{{version}},value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.version != '' }}
-            type=semver,pattern=v{{major}}.{{minor}},value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.version != '' }}
-            type=semver,pattern=v{{major}},value=${{ needs.prepare.outputs.version }},enable=${{ needs.prepare.outputs.version != '' && !startsWith(needs.prepare.outputs.version, '0.') }}
-            type=raw,value=latest,enable=${{ needs.prepare.outputs.version != '' }}
+            type=semver,pattern=v{{version}},value=${{ needs.prepare.outputs.version }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ needs.prepare.outputs.version }}
+            type=semver,pattern=v{{major}},value=${{ needs.prepare.outputs.version }},enable=${{ !startsWith(needs.prepare.outputs.version, '0.') }}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=Dockyard ${{ matrix.target }}
             org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
@@ -226,6 +222,7 @@ jobs:
   smoke:
     name: Smoke-test ${{ matrix.platform }} images
     needs: [prepare, build]
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ${{ matrix.runner }}
     # Registry credentials are used only to pull the pushed digests.
     environment: release
@@ -317,6 +314,7 @@ jobs:
   publish:
     name: Tag ${{ matrix.target }}
     needs: [prepare, smoke]
+    if: needs.prepare.outputs.release == 'true'
     runs-on: ubuntu-24.04
     environment: release
     timeout-minutes: 15

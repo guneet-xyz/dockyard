@@ -10,6 +10,7 @@ import { parse } from "yaml"
 
 type Step = {
   name?: string
+  if?: string
   id?: string
   uses?: string
   run?: string
@@ -78,6 +79,7 @@ describe("release and publishing workflow contracts", () => {
     expect(release.jobs.prepare.if).toContain("github.repository == 'guneet-xyz/dockyard'")
     expect(release.jobs.prepare.if).toContain("github.ref == 'refs/heads/main'")
     expect(release.jobs.checks.uses).toBe("./.github/workflows/ci.yml")
+    expect(release.jobs.checks.needs).toBe("prepare")
     expect(builder.needs).toEqual(["prepare", "checks"])
     expect(smoke.needs).toEqual(["prepare", "build"])
     expect(publisher.needs).toEqual(["prepare", "smoke"])
@@ -93,6 +95,17 @@ describe("release and publishing workflow contracts", () => {
     expect(
       release.jobs.prepare.steps?.find((step) => step.name?.startsWith("Dispatch quality"))?.run,
     ).toContain('gh workflow run ci.yml --ref "$branch"')
+  })
+
+  it("runs only Release Please on main pushes that do not create a release", () => {
+    const released = "needs.prepare.outputs.release == 'true'"
+    for (const job of ["checks", "build", "smoke", "publish"])
+      expect(release.jobs[job].if).toBe(released)
+    expect(Object.keys(release.jobs)).toEqual(["prepare", "checks", "build", "smoke", "publish"])
+    const checkout = release.jobs.prepare.steps!.find((step) =>
+      step.uses?.startsWith("actions/checkout@"),
+    )
+    expect(checkout?.if).toBe("steps.release.outputs.release_created == 'true'")
   })
 
   it("has no manual or other publishing trigger besides pushes to main", () => {
@@ -145,7 +158,7 @@ describe("release and publishing workflow contracts", () => {
     expect(step(publisher, "Log in to the Dockyard registry").with?.registry).toBe("cr.guneet.dev")
   })
 
-  it("publishes only v-prefixed version tags, latest for releases, and edge for main", () => {
+  it("publishes only v-prefixed version tags and latest, with no edge or SHA tags", () => {
     const metadata = step(builder, "meta")
     expect(metadata.with?.images).toBe("cr.guneet.dev/dockyard/${{ matrix.target }}")
     expect(metadata.with?.flavor).toBe("latest=false")
@@ -154,18 +167,16 @@ describe("release and publishing workflow contracts", () => {
       "org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}",
     )
     const tags = String(metadata.with?.tags).trim().split("\n")
-    const released = "needs.prepare.outputs.version != ''"
     const value = "value=${{ needs.prepare.outputs.version }}"
     expect(tags).toEqual([
-      "type=raw,value=sha-${{ needs.prepare.outputs.sha }},priority=100",
-      "type=raw,value=edge,enable=${{ needs.prepare.outputs.edge == 'true' }}",
-      `type=semver,pattern=v{{version}},${value},enable=\${{ ${released} }}`,
-      `type=semver,pattern=v{{major}}.{{minor}},${value},enable=\${{ ${released} }}`,
-      `type=semver,pattern=v{{major}},${value},enable=\${{ ${released} && !startsWith(needs.prepare.outputs.version, '0.') }}`,
-      `type=raw,value=latest,enable=\${{ ${released} }}`,
+      `type=semver,pattern=v{{version}},${value}`,
+      `type=semver,pattern=v{{major}}.{{minor}},${value}`,
+      `type=semver,pattern=v{{major}},${value},enable=\${{ !startsWith(needs.prepare.outputs.version, '0.') }}`,
+      "type=raw,value=latest",
     ])
-    for (const tag of tags.filter((tag) => tag.startsWith("type=semver")))
-      expect(tag).toMatch(/pattern=v\{\{/)
+    const workflow = load(".github/workflows/release.yml")
+    expect(workflow).not.toMatch(/\bedge\b/)
+    expect(workflow).not.toContain("sha-")
   })
 
   it("uses a single conventional-commit application version, with a bootstrap or matching released manifest", () => {
@@ -204,16 +215,13 @@ describe("publication preflight and early-failure cleanup", () => {
         ...process.env,
         DOCKER_USERNAME: "test-user",
         DOCKER_PASSWORD: "test-secret",
-        RELEASE_VERSION: "",
+        RELEASE_VERSION: version,
         ...env,
       },
     })
   }
-  it("accepts environment credentials for development and version-matching releases", async () => {
+  it("accepts environment credentials for the matching release version", async () => {
     await expect(checkCredentials({})).resolves.toMatchObject({ stdout: "" })
-    await expect(checkCredentials({ RELEASE_VERSION: version })).resolves.toMatchObject({
-      stdout: "",
-    })
   })
   it.each(["DOCKER_USERNAME", "DOCKER_PASSWORD"])(
     "fails clearly when %s is missing without printing the other secret",
@@ -224,7 +232,8 @@ describe("publication preflight and early-failure cleanup", () => {
       })
     },
   )
-  it("refuses to label source with a different or prerelease version", async () => {
+  it("refuses to build without a release version, or with a different or prerelease one", async () => {
+    await expect(checkCredentials({ RELEASE_VERSION: "" })).rejects.toMatchObject({ code: 1 })
     await expect(checkCredentials({ RELEASE_VERSION: "999.0.0" })).rejects.toMatchObject({
       code: 1,
     })
@@ -347,7 +356,6 @@ async function resolve(env: Record<string, string> = {}) {
     env: {
       ...process.env,
       PATH: `${folder}:${process.env.PATH}`,
-      SOURCE_SHA: sha,
       TAG_SHA: sha,
       RELEASE_CREATED: "false",
       RELEASE_TAG: "",
@@ -365,15 +373,15 @@ async function resolve(env: Record<string, string> = {}) {
 }
 
 describe("release source resolution", () => {
-  it("publishes unreleased main commits only as development builds", async () => {
-    expect(await resolve()).toEqual({ sha, version: "", edge: "true" })
+  it("publishes nothing for main pushes that do not create a release", async () => {
+    expect(await resolve()).toEqual({ release: "false" })
   })
   it("publishes the exact newly released commit", async () => {
     expect(
       await resolve({ RELEASE_CREATED: "true", RELEASE_TAG: "v1.2.3", RELEASE_SHA: sha }),
-    ).toEqual({ sha, version: "1.2.3", edge: "true" })
+    ).toEqual({ release: "true", sha, version: "1.2.3" })
   })
-  it("does not overwrite edge when Release Please discovers an older release", async () => {
+  it("builds a release that Release Please creates for an older merged commit from that commit", async () => {
     expect(
       await resolve({
         RELEASE_CREATED: "true",
@@ -381,7 +389,7 @@ describe("release source resolution", () => {
         RELEASE_SHA: olderSha,
         TAG_SHA: olderSha,
       }),
-    ).toEqual({ sha: olderSha, version: "1.2.3", edge: "false" })
+    ).toEqual({ release: "true", sha: olderSha, version: "1.2.3" })
   })
   it.each(["main", "v01.2.3", "1.2.3", "v1.2.3-rc.1", "v1.2.3\nsha=injected", "v1.2.3; echo x"])(
     "rejects invalid, prerelease, or injected release tag %j",
@@ -498,7 +506,7 @@ describe("smoke tests use the exact pushed digests", () => {
 describe("tags are created only from the tested digests", () => {
   const script = step(publisher, "Tag the tested multi-architecture image").run!
   const image = "cr.guneet.dev/dockyard/web"
-  const tags = [`${image}:sha-${sha}`, `${image}:edge`, `${image}:v1.2.3`, `${image}:v1.2`]
+  const tags = [`${image}:v1.2.3`, `${image}:v1.2`, `${image}:v1`, `${image}:latest`]
   async function tag(amd64Tags = tags, arm64Tags = tags) {
     const folder = await temporaryFolder("publish-test")
     await fakeDocker(folder)
