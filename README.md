@@ -53,7 +53,7 @@ docker tag alpine:latest localhost:3000/library/alpine:latest
 docker push localhost:3000/library/alpine:latest
 ```
 
-The base `deploy/compose.yaml` uses prebuilt images from `cr.guneet.dev/dockyard/*`. Set `DOCKYARD_IMAGE_TAG` to an available released version (or `latest`) and omit the build override to use them. Add `deploy/compose.build.yaml` to build the four Dockyard images locally; PostgreSQL and Distribution still use upstream images. The `local` tag is never published by CI. See [CI/CD and releases](docs/releases.md) for registry secrets, versioning, and image tags.
+The base `deploy/compose.yaml` uses prebuilt images from `cr.guneet.dev/dockyard/*`. Set `DOCKYARD_IMAGE_TAG` to an available released version (for example `v1.2.3`) and omit the build override to use them. Add `deploy/compose.build.yaml` to build the four Dockyard images locally; PostgreSQL and Distribution still use upstream images. The `local` tag is never published by CI. See [CI/CD and releases](docs/releases.md) for registry secrets, versioning, and image tags.
 
 ## Documentation
 

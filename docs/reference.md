@@ -52,7 +52,7 @@ The initial UI intentionally starts empty. Create repositories or push real imag
 | `deploy/compose.yaml`       | Image-only deployment: uses cached prebuilt images or pulls missing ones. Contains no build definitions.                                              |
 | `deploy/compose.build.yaml` | Local-build override: builds `dockyard/init`, `dockyard/migrate`, `dockyard/web`, and `dockyard/ingress` from this checkout rather than pulling them. |
 
-For prebuilt images, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an available full released version (without `v`), or `latest`, then run:
+For prebuilt images, set `DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard` and `DOCKYARD_IMAGE_TAG` to an available full released version, matching the Git tag (for example `v1.2.3`), then run:
 
 ```sh
 docker compose --env-file .env -f deploy/compose.yaml pull

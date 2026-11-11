@@ -7,7 +7,7 @@ GitHub Actions publishes four Docker/OCI images to the Dockyard instance at `cr.
 - `cr.guneet.dev/dockyard/web`
 - `cr.guneet.dev/dockyard/ingress`
 
-Every published tag is a multi-architecture image index containing **`linux/amd64` and `linux/arm64`**. All four images share the same source revision and release version. Buildx produces OCI provenance and SBOM attestations and uses separate GitHub Actions build-cache scopes per Dockerfile target. CI does not publish PostgreSQL or Distribution images, deploy the running registry, or push npm packages.
+Every published tag is a multi-architecture image index containing **`linux/amd64` and `linux/arm64`**. All four images share the same source revision and release version. Buildx produces OCI provenance and SBOM attestations and uses separate GitHub Actions build-cache scopes per Dockerfile target and architecture. Every action in the CI and release workflows is pinned to a full commit SHA with a version comment. CI does not publish PostgreSQL or Distribution images, deploy the running registry, or push npm packages.
 
 ## One-time GitHub and registry setup
 
@@ -19,14 +19,14 @@ Every published tag is a multi-architecture image index containing **`linux/amd6
    | `DOCKER_USERNAME` | The generated `_key_<uuid>` Docker username.      |
    | `DOCKER_PASSWORD` | Its `dk_…` secret, not the owner's user password. |
 
-   Each image-publishing matrix job declares `environment: release` directly in **Release and publish**, so GitHub resolves the secrets in that job after any environment approvals/protection rules are satisfied. Registry secrets are not passed across a reusable-workflow boundary or inherited by CI. If deployment-branch restrictions are enabled for this environment, allow **main** (the workflow runs on main even when rebuilding a release tag). Release preparation and CI jobs remain outside this environment.
+   The build, smoke-test, and tagging jobs in **Release and publish** each declare `environment: release` directly, so GitHub resolves the secrets in those jobs after any environment approvals/protection rules are satisfied. Registry secrets are not passed across a reusable-workflow boundary, inherited by CI, or passed to image builds; the smoke-test jobs use them only to pull the pushed digests and log out before running test tooling. If deployment-branch restrictions are enabled for this environment, allow **main** (the workflow only runs on main). Release preparation and CI jobs remain outside this environment.
 
 3. Under **Settings → Actions → General → Workflow permissions**, enable **Allow GitHub Actions to create and approve pull requests**. If the repository's organization restricts Actions, allow the pinned official Docker actions and Google's Release Please action. The release preparation job requests narrowly scoped contents, issue/label, pull-request, and workflow-dispatch permissions; test/build jobs only need contents read.
 4. Push this configuration to `main`. Pull requests and other branches run quality/integration checks without registry secrets or publishing rights. The release/publishing workflow is restricted to `main` in `guneet-xyz/dockyard`; forks must deliberately change that guard and configure their own secrets before publishing.
 
 The registry must be reachable from GitHub-hosted runners over HTTPS with a publicly trusted certificate. Keep its existing Dockyard Basic-to-bearer authentication and forward `Authorization` through its proxy unchanged. This pipeline uses ordinary `docker/login-action` credentials, not browser sessions, proxy bypass credentials, or an internal service token. Secrets are used for registry login only, never as Docker build arguments, image labels, or committed files. Rotate the key from Dockyard and update `DOCKER_PASSWORD` when needed; the username stays unchanged.
 
-Before building, each publication job requests a scoped token and checks that the registry grants both `pull` and `push` for its exact `dockyard/<image>` path. This check uploads nothing and never prints credentials or bearer tokens. Successful Docker login alone does not prove write access. If preflight reports insufficient permissions, create a replacement key with a `dockyard` project **pull + push** grant owned by an enabled maintainer/admin, then update both secrets in the `release` environment and retry. Changing the workflow cannot expand a key's grants or its owner's role.
+Before building, each build job requests a scoped token and checks that the registry grants both `pull` and `push` for its exact `dockyard/<image>` path. This check uploads nothing and never prints credentials or bearer tokens. Successful Docker login alone does not prove write access. If preflight reports insufficient permissions, create a replacement key with a `dockyard` project **pull + push** grant owned by an enabled maintainer/admin, then update both secrets in the `release` environment and retry. Changing the workflow cannot expand a key's grants or its owner's role.
 
 ## Automatic versions from conventional commits
 
@@ -46,23 +46,33 @@ The first public release starts at **`0.1.0`**, matching the bootstrap package v
 
 **Merge the release PR to approve a stable release.** Release Please then creates the Git tag `vMAJOR.MINOR.PATCH` and a GitHub release with generated notes. Stable publication runs in the same workflow using Release Please's exact release SHA, not whatever happens to be the latest branch head. Quality, unit, registry integration, Docker CLI, and browser checks must pass for that source before any image is pushed.
 
-Only the built-in `GITHUB_TOKEN` is used for GitHub release operations; no PAT or third secret is required. Bot-created PRs and tags normally do not trigger more workflows. To avoid that trap, the release workflow explicitly dispatches the **Quality and integration** workflow on newly created/updated release-PR branches, and starts its environment-bound publication jobs after checks. Manual CI dispatch is also available on a release-PR branch if a check needs rerunning. Choose the resulting quality-check status when configuring branch protection.
+Only the built-in `GITHUB_TOKEN` is used for GitHub release operations; no PAT or third secret is required. Bot-created PRs and tags normally do not trigger more workflows. To avoid that trap, the release workflow explicitly dispatches the **Quality and integration** workflow on newly created/updated release-PR branches, and starts its environment-bound publication jobs after checks. Manual CI dispatch is also available on a release-PR branch if a check needs rerunning; it only runs checks and cannot publish. **Release and publish** has no manual trigger. Choose the resulting quality-check status when configuring branch protection.
 
 ## Published tags
 
 For a stable `v1.2.3` release, each of the four images receives:
 
-| Image tag                            | Meaning                                                               |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `1.2.3`                              | Full stable version; use the same tag for every Dockyard service.     |
-| `1.2`                                | Latest stable patch in that minor line.                               |
-| `1`                                  | Latest stable release in that major line (no `0` alias is generated). |
-| `latest`                             | Most recently published stable release.                               |
-| `sha-<full-40-character-commit-sha>` | Traceable source revision.                                            |
+| Image tag                            | Meaning                                                                |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| `v1.2.3`                             | Full stable version, matching the Git tag; use it for every service.   |
+| `v1.2`                               | Latest stable patch in that minor line.                                |
+| `v1`                                 | Latest stable release in that major line (no `v0` alias is generated). |
+| `latest`                             | Most recently published stable release.                                |
+| `sha-<full-40-character-commit-sha>` | Traceable source revision.                                             |
+
+Version tags always carry the `v` prefix; no unprefixed copies (`1.2.3`, `1.2`, `1`) are published. Tags published before this rule, such as `0.1.0`, `0.2.0`, and `0.2`, remain in the registry and are not retagged.
 
 Successful development runs on `main` receive `edge` and the full SHA tag, **not** `latest` or the package's not-yet-released version. `edge` is updated only for the tested commit that triggered that main run, never for an older release discovered by Release Please. No PR, feature-branch, `local`, or prerelease image tags are published by this workflow.
 
-The four target builds run as a matrix, with at most two in parallel; each target builds both architectures. Publication is serialized across release runs and is not canceled halfway through. A registry cannot atomically update tags across four repositories, so **wait for the entire workflow to succeed** before upgrading, and pin a full version or per-image digest rather than treating floating aliases as an atomic deployment.
+## How images are built, tested, and tagged
+
+After full CI passes on the exact source commit, **Release and publish** runs three stages:
+
+1. **Build:** each Dockerfile target is built separately for each platform on a native runner (`ubuntu-24.04` for `linux/amd64`, `ubuntu-24.04-arm` for `linux/arm64`), with at most four builds in parallel. Each build is pushed **by digest only**, with its SBOM and provenance attestations, so no tag points to it yet.
+2. **Smoke test:** for each platform, on its native runner, the four pushed digests are pulled and started together as the `deploy/compose.yaml` stack (using a local-only `DOCKYARD_IMAGE_PREFIX`/`DOCKYARD_IMAGE_TAG` and `--pull never`, so nothing else can be substituted). The stack must become healthy, `init` and `migrate` must exit successfully, and the registry integration and Docker CLI push/pull checks from CI must pass against it.
+3. **Tag:** only after both platforms pass, each image's two tested digests are combined with `docker buildx imagetools create` into one multi-architecture index carrying all of its tags (including `edge`). The run summary records each image's index digest and tags.
+
+Publication is serialized across release runs and is not canceled halfway through. A registry cannot atomically update tags across four repositories, so **wait for the entire workflow to succeed** before upgrading, and pin a full version (preferably with its digest) rather than treating floating aliases as an atomic deployment.
 
 ## Use published images with Compose
 
@@ -71,7 +81,7 @@ Preserve existing secrets and data. Set these non-secret values in your deployme
 ```dotenv
 DOCKYARD_IMAGE_PREFIX=cr.guneet.dev/dockyard
 # Replace with a version whose entire publication workflow has succeeded.
-DOCKYARD_IMAGE_TAG=0.1.0
+DOCKYARD_IMAGE_TAG=v1.2.3
 ```
 
 Then omit the local-build override:
@@ -87,9 +97,9 @@ docker compose --env-file .env -f deploy/compose.yaml up --wait --wait-timeout 2
 
 ## Failed publication and recovery
 
-A GitHub release/tag may already exist when a build or push fails. Fix the cause (key expiry/grants, registry availability, build failure), then **rerun failed jobs** in that workflow; do not rerun its successful release-preparation job or create another version just to retry an upload. The run summary records each successfully pushed image's index digest and tags.
+A GitHub release/tag may already exist when a build, smoke test, or push fails. Fix the cause (key expiry/grants, registry availability, build or smoke-test failure), then use **Re-run failed jobs** on that workflow run. Successful jobs, including release preparation, are kept; failed jobs and the jobs that depend on them run again from the same source commit. Do not create another version just to retry an upload. A failure before tagging leaves only untagged digests in the registry; a failure while tagging may leave some of the four images tagged, which the re-run completes. If the released source itself fails to build or start, re-running cannot help: fix it on `main` and release a new version.
 
-For a later retry, run **Release and publish → Run workflow** on **main**, set `release_tag` to the existing GitHub release (for example `v0.1.0`), and leave `update_latest` off. This validates the release tag, its ancestry on `main`, and its package version, tests that exact source, then republishes the full version and SHA tags without moving `edge`, `latest`, or major/minor aliases. Only turn `update_latest` on when intentionally restoring the current stable release; enabling it for an older release moves those aliases backwards. Recovery takes workflow definitions from main while building the selected release's source.
+There is no manual republish trigger. If a failed run can no longer be re-run, republishing an existing release requires a reviewed, one-off workflow change that builds that release from its tag, following the same CI, smoke-test, and tagging steps.
 
 This setup does not upload anything locally or modify GitHub repository settings/secrets automatically. Add the secrets, enable PR creation, and push the committed workflow configuration to activate it.
 
