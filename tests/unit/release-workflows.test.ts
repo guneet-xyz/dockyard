@@ -186,6 +186,8 @@ describe("release and publishing workflow contracts", () => {
     expect(config.packages["."]["release-type"]).toBe("node")
     expect(config.packages["."]["include-component-in-tag"]).toBe(false)
     expect(config.packages["."]["initial-version"]).toBe("0.1.0")
+    expect(config.packages["."]["bump-minor-pre-major"]).toBe(true)
+    expect(config.packages["."]).not.toHaveProperty("bump-patch-for-minor-pre-major")
     if (manifest["."]) expect(manifest["."]).toBe(JSON.parse(load("package.json")).version)
     expect(load(".prettierignore")).toContain("CHANGELOG.md")
     expect(load(".prettierignore")).toContain(".release-please-manifest.json")

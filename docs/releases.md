@@ -36,11 +36,13 @@ Release Please maintains one release PR for the whole application, updating `pac
 | ---------------------------------------------------- | ---------------------------- |
 | `fix: handle interrupted image uploads`              | Patch                        |
 | `feat: add retention policies`                       | Minor                        |
-| `feat!: change registry authentication`              | Major                        |
-| Any conventional commit with `BREAKING CHANGE:`      | Major                        |
+| `feat!: change registry authentication`              | Minor while 0.x, then major  |
+| Any conventional commit with `BREAKING CHANGE:`      | Minor while 0.x, then major  |
 | `docs:`, `test:`, `chore:` without a breaking change | No release bump on their own |
 
 Use conventional commit messages when committing directly, or use a conventional **PR title** when squash-merging. For a breaking-change footer, preserve it in the squash commit body. A batch of commits takes the highest applicable bump, not one release per commit.
+
+While Dockyard is on `0.x`, `bump-minor-pre-major` makes breaking changes bump the minor version (for example `0.2.1` → `0.3.0`) instead of releasing `1.0.0`; `feat` and `fix` keep their normal minor and patch bumps. `1.0.0` will be released deliberately with a `Release-As: 1.0.0` commit footer (or `release-as` in the config), not by an incidental breaking change.
 
 The first public release starts at **`0.1.0`**, matching the bootstrap package version; there is no prior Git release/tag to seed. The empty manifest bootstraps the first release from existing conventional history. After that, Release Please tracks the last released version automatically. Do not manually change the manifest or package version for normal releases.
 
