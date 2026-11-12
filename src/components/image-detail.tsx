@@ -1,6 +1,5 @@
 "use client"
-import { useState } from "react"
-import Link from "next/link"
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeft,
@@ -19,31 +18,25 @@ import {
   Terminal,
   Trash2,
 } from "lucide-react"
+import Link from "next/link"
+import { useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/api-client"
+
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
-import { PullCount, PULL_COUNT_DESCRIPTION } from "@/components/pull-count"
 import { DescriptionEditor } from "@/components/description-editor"
-import { Textarea } from "@/components/ui/textarea"
-import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import { LogoEditor } from "@/components/logo-editor"
+import { PULL_COUNT_DESCRIPTION, PullCount } from "@/components/pull-count"
 import { ResourceIcon } from "@/components/resource-icon"
-import type { ImageTag, Repository, Visibility } from "@/lib/types"
-import { formatBytes, timeAgo } from "@/lib/utils"
-import { useSession } from "@/hooks/use-session"
+import {
+  CommandBlock,
+  CopyButton,
+  ErrorState,
+  TableSkeleton,
+  VisibilityBadge,
+} from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -52,13 +45,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
-  CommandBlock,
-  CopyButton,
-  ErrorState,
-  TableSkeleton,
-  VisibilityBadge,
-} from "@/components/shared"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { useSession } from "@/hooks/use-session"
+import { api } from "@/lib/api-client"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+import type { ImageTag, Repository, Visibility } from "@/lib/types"
+import { formatBytes, timeAgo } from "@/lib/utils"
 
 type Detail = {
   repository: Repository
@@ -70,7 +72,9 @@ type Detail = {
 
 function RepositorySettings({ repository }: { repository: Repository }) {
   const [description, setDescription] = useState(repository.description)
-  const [visibility, setVisibility] = useState<Visibility>(repository.visibility)
+  const [visibility, setVisibility] = useState<Visibility>(
+    repository.visibility,
+  )
   const client = useQueryClient()
   const mutation = useMutation({
     mutationFn: () =>
@@ -124,19 +128,25 @@ function RepositorySettings({ repository }: { repository: Repository }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="public">Public — anyone can browse and pull</SelectItem>
-                <SelectItem value="private">Private — signed-in users only</SelectItem>
+                <SelectItem value="public">
+                  Public — anyone can browse and pull
+                </SelectItem>
+                <SelectItem value="private">
+                  Private — signed-in users only
+                </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs leading-relaxed text-muted-foreground">
               {repository.projectVisibility === "private" &&
                 "This project is private, so every image requires sign-in. "}
-              Changing to private prevents new guest tokens. Previously issued pull tokens expire
-              within 5 minutes. Already downloaded images cannot be revoked.
+              Changing to private prevents new guest tokens. Previously issued
+              pull tokens expire within 5 minutes. Already downloaded images
+              cannot be revoked.
             </p>
           </div>
           <Button disabled={mutation.isPending} type="submit">
-            {mutation.isPending && <Loader2 className="animate-spin" />}Save changes
+            {mutation.isPending && <Loader2 className="animate-spin" />}Save
+            changes
           </Button>
         </form>
       </CardContent>
@@ -153,7 +163,9 @@ export default function ImageDetail({ name }: { name: string }) {
   const query = useQuery({
     queryKey: ["repository", name, page, search],
     queryFn: () =>
-      api<Detail>(`/api/repositories/${name}?page=${page}&search=${encodeURIComponent(search)}`),
+      api<Detail>(
+        `/api/repositories/${name}?page=${page}&search=${encodeURIComponent(search)}`,
+      ),
     refetchInterval: 60000,
   })
   const remove = useMutation({
@@ -188,18 +200,27 @@ export default function ImageDetail({ name }: { name: string }) {
             Back to repositories
           </Link>
         </Button>
-        <ErrorState message={query.error.message} retry={() => query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          retry={() => query.refetch()}
+        />
       </div>
     )
   const { repository, images, total, canWrite } = query.data
   return (
     <div className="page-enter space-y-6">
       <Link
-        href={repository.projectName ? `/projects/${repository.projectName}` : "/repositories"}
+        href={
+          repository.projectName
+            ? `/projects/${repository.projectName}`
+            : "/repositories"
+        }
         className="flex w-fit items-center gap-2 text-xs text-muted-foreground hover:text-primary"
       >
         <ArrowLeft className="size-3.5" />
-        {repository.projectName ? `Project ${repository.projectName}` : "All images"}
+        {repository.projectName
+          ? `Project ${repository.projectName}`
+          : "All images"}
       </Link>
       <div className="flex flex-wrap items-center gap-4">
         <ResourceIcon
@@ -210,11 +231,15 @@ export default function ImageDetail({ name }: { name: string }) {
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="break-all text-2xl font-semibold tracking-tight">{name}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight break-all">
+              {name}
+            </h1>
             <VisibilityBadge visibility={repository.visibility} />
-            {repository.legacy && <Badge variant="secondary">Legacy path</Badge>}
+            {repository.legacy && (
+              <Badge variant="secondary">Legacy path</Badge>
+            )}
           </div>
-          <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-muted-foreground">
+          <p className="mt-1.5 text-sm break-words whitespace-pre-wrap text-muted-foreground">
             {repository.description || "A home for your container image."}
           </p>
         </div>
@@ -223,9 +248,15 @@ export default function ImageDetail({ name }: { name: string }) {
           {repository.tagCount} tags
         </Badge>
         <PullCount count={repository.pullCount} label="Image pull count" />
-        {canWrite && <LogoEditor kind="image" name={name} logoUrl={repository.logoUrl} />}
         {canWrite && (
-          <DescriptionEditor kind="image" name={name} description={repository.description} />
+          <LogoEditor kind="image" name={name} logoUrl={repository.logoUrl} />
+        )}
+        {canWrite && (
+          <DescriptionEditor
+            kind="image"
+            name={name}
+            description={repository.description}
+          />
         )}
       </div>
       <Tabs defaultValue="tags">
@@ -249,7 +280,7 @@ export default function ImageDetail({ name }: { name: string }) {
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="min-w-0 space-y-4">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
                 <Input
                   className="pl-9"
                   placeholder="Find a tag…"
@@ -267,7 +298,9 @@ export default function ImageDetail({ name }: { name: string }) {
                     <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
                       <div className="flex items-center gap-2.5">
                         <Tag className="size-4 text-primary" />
-                        <span className="font-mono text-sm font-medium">{image.name}</span>
+                        <span className="font-mono text-sm font-medium">
+                          {image.name}
+                        </span>
                         {image.name === "latest" && <Badge>Latest</Badge>}
                       </div>
                       {canWrite && (
@@ -284,7 +317,10 @@ export default function ImageDetail({ name }: { name: string }) {
                     </div>
                     <CardContent className="space-y-4 pt-4">
                       <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                        <PullCount count={image.pullCount} label={`Pulls for tag ${image.name}`} />
+                        <PullCount
+                          count={image.pullCount}
+                          label={`Pulls for tag ${image.name}`}
+                        />
                         <span className="flex items-center gap-1.5">
                           <HardDrive className="size-3.5" />
                           {formatBytes(image.size)} stored image data
@@ -296,13 +332,17 @@ export default function ImageDetail({ name }: { name: string }) {
                             : "Platform not specified"}
                         </span>
                         {image.created && (
-                          <span title={new Date(image.created).toLocaleString()}>
+                          <span
+                            title={new Date(image.created).toLocaleString()}
+                          >
                             Built {timeAgo(image.created)}
                           </span>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">DIGEST</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          DIGEST
+                        </span>
                         <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
                           {image.digest}
                         </code>
@@ -311,7 +351,9 @@ export default function ImageDetail({ name }: { name: string }) {
                           className="size-6 text-muted-foreground [&_svg]:size-3"
                         />
                       </div>
-                      <CommandBlock command={`docker pull ${host}/${name}:${image.name}`} />
+                      <CommandBlock
+                        command={`docker pull ${host}/${name}:${image.name}`}
+                      />
                     </CardContent>
                   </Card>
                 ))
@@ -320,7 +362,9 @@ export default function ImageDetail({ name }: { name: string }) {
                   <div className="flex flex-col items-center px-6 py-12 text-center">
                     <PackageOpen className="mb-4 size-9 text-primary/70" />
                     <h2 className="font-medium">
-                      {search ? "No matching tags" : "Ready for your first image"}
+                      {search
+                        ? "No matching tags"
+                        : "Ready for your first image"}
                     </h2>
                     <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                       {search
@@ -329,7 +373,9 @@ export default function ImageDetail({ name }: { name: string }) {
                     </p>
                     {!search && (
                       <div className="mt-5 w-full max-w-lg">
-                        <CommandBlock command={`docker push ${host}/${name}:latest`} />
+                        <CommandBlock
+                          command={`docker push ${host}/${name}:latest`}
+                        />
                       </div>
                     )}
                   </div>
@@ -389,7 +435,9 @@ export default function ImageDetail({ name }: { name: string }) {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Repository information</CardTitle>
+                  <CardTitle className="text-sm">
+                    Repository information
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 text-xs">
                   <div className="flex justify-between">
@@ -407,9 +455,10 @@ export default function ImageDetail({ name }: { name: string }) {
                     </span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Counts external tag lookups since tracking was enabled, not verified completed
-                    downloads. Repeats by one client within a minute count once; digest-only pulls
-                    and internal UI reads are excluded.
+                    Counts external tag lookups since tracking was enabled, not
+                    verified completed downloads. Repeats by one client within a
+                    minute count once; digest-only pulls and internal UI reads
+                    are excluded.
                   </p>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Format</span>
@@ -418,7 +467,9 @@ export default function ImageDetail({ name }: { name: string }) {
                   <div className="border-t pt-4">
                     <p className="flex items-center gap-1.5 leading-relaxed text-muted-foreground">
                       <ShieldCheck className="size-3.5 shrink-0 text-primary" />
-                      {canWrite ? "You have read and write access." : "You have read-only access."}
+                      {canWrite
+                        ? "You have read and write access."
+                        : "You have read-only access."}
                     </p>
                   </div>
                 </CardContent>
@@ -431,7 +482,8 @@ export default function ImageDetail({ name }: { name: string }) {
             <CardHeader>
               <CardTitle className="text-base">Use this repository</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Compatible with Docker, Podman, containerd, and other OCI clients.
+                Compatible with Docker, Podman, containerd, and other OCI
+                clients.
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -453,12 +505,20 @@ export default function ImageDetail({ name }: { name: string }) {
               {canWrite && (
                 <>
                   <div>
-                    <h3 className="mb-3 text-sm font-medium">3. Tag your local image</h3>
-                    <CommandBlock command={`docker tag my-app:latest ${host}/${name}:latest`} />
+                    <h3 className="mb-3 text-sm font-medium">
+                      3. Tag your local image
+                    </h3>
+                    <CommandBlock
+                      command={`docker tag my-app:latest ${host}/${name}:latest`}
+                    />
                   </div>
                   <div>
-                    <h3 className="mb-3 text-sm font-medium">4. Push to Dockyard</h3>
-                    <CommandBlock command={`docker push ${host}/${name}:latest`} />
+                    <h3 className="mb-3 text-sm font-medium">
+                      4. Push to Dockyard
+                    </h3>
+                    <CommandBlock
+                      command={`docker push ${host}/${name}:latest`}
+                    />
                   </div>
                 </>
               )}
@@ -498,16 +558,21 @@ export default function ImageDetail({ name }: { name: string }) {
             <DialogTitle>Delete this manifest?</DialogTitle>
             <DialogDescription>
               This deletes the manifest for{" "}
-              <strong className="text-foreground">{deleting?.name}</strong>. Every tag pointing to
-              the same digest will be removed. Already downloaded images are unaffected, and layers
-              remain on disk until garbage collection.
+              <strong className="text-foreground">{deleting?.name}</strong>.
+              Every tag pointing to the same digest will be removed. Already
+              downloaded images are unaffected, and layers remain on disk until
+              garbage collection.
             </DialogDescription>
           </DialogHeader>
-          <code className="break-all rounded-md border bg-background p-3 font-mono text-[11px] text-muted-foreground">
+          <code className="rounded-md border bg-background p-3 font-mono text-[11px] break-all text-muted-foreground">
             {deleting?.digest}
           </code>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(null)} disabled={remove.isPending}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleting(null)}
+              disabled={remove.isPending}
+            >
               Cancel
             </Button>
             <Button
@@ -515,7 +580,12 @@ export default function ImageDetail({ name }: { name: string }) {
               onClick={() => remove.mutate()}
               disabled={remove.isPending}
             >
-              {remove.isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}Delete manifest
+              {remove.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Trash2 />
+              )}
+              Delete manifest
             </Button>
           </DialogFooter>
         </DialogContent>

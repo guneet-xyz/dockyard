@@ -1,13 +1,14 @@
 "use client"
-import { useState } from "react"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { FilePenLine, Loader2 } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
+
 import { api } from "@/lib/api-client"
 import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+
 import { Button } from "./ui/button"
-import { Label } from "./ui/label"
-import { Textarea } from "./ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog"
+import { Label } from "./ui/label"
+import { Textarea } from "./ui/textarea"
 
 export function DescriptionEditor({
   kind,
@@ -38,9 +41,17 @@ export function DescriptionEditor({
       }),
     onSuccess: () => {
       setOpen(false)
-      for (const key of ["repository", "repositories", "project", "projects", "activity"])
+      for (const key of [
+        "repository",
+        "repositories",
+        "project",
+        "projects",
+        "activity",
+      ])
         void client.invalidateQueries({ queryKey: [key] })
-      toast.success(`${kind === "image" ? "Image" : "Project"} description saved.`)
+      toast.success(
+        `${kind === "image" ? "Image" : "Project"} description saved.`,
+      )
     },
     onError: (error) => toast.error(error.message),
   })
@@ -62,9 +73,12 @@ export function DescriptionEditor({
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{kind === "image" ? "Image" : "Project"} description</DialogTitle>
+          <DialogTitle>
+            {kind === "image" ? "Image" : "Project"} description
+          </DialogTitle>
           <DialogDescription className="break-all">
-            Describe {name}. This changes only its description, not its visibility or image content.
+            Describe {name}. This changes only its description, not its
+            visibility or image content.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -87,7 +101,8 @@ export function DescriptionEditor({
             />
             <p className="text-xs text-muted-foreground">
               {text.length.toLocaleString("en-US")} /{" "}
-              {MAX_DESCRIPTION_LENGTH.toLocaleString("en-US")} characters · plain text
+              {MAX_DESCRIPTION_LENGTH.toLocaleString("en-US")} characters ·
+              plain text
             </p>
           </div>
           <DialogFooter>
@@ -100,7 +115,8 @@ export function DescriptionEditor({
               Cancel
             </Button>
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending && <Loader2 className="animate-spin" />}Save description
+              {save.isPending && <Loader2 className="animate-spin" />}Save
+              description
             </Button>
           </DialogFooter>
         </form>

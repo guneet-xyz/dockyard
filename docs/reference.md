@@ -257,6 +257,8 @@ pnpm build
 pnpm start
 ```
 
+Run `pnpm format:write` to apply the [shared Prettier configuration](https://git.guneet.dev/guneet/workspace/src/branch/main/decisions/prettier-configuration.md), which also sorts imports, `package.json`, and Tailwind classes.
+
 Unit tests cover the role matrix, repository names, origin validation, body limits, presentation utilities, single-origin configuration, and environment generation (POSIX shell and OpenSSL required). Integration checks exercise real PostgreSQL sessions and registry authorization through ingress, including forged-token rejection, private image access, an 8 MiB streamed PATCH upload, upload continuation URLs, HEAD requests, and byte-range downloads:
 
 ```sh

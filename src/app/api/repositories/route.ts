@@ -1,15 +1,16 @@
+import { eq, isNotNull } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { z } from "zod"
+
 import { audit, currentUser, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
-import { projects, repositories, imageTagPulls } from "@/lib/db/schema"
-import { eq, isNotNull } from "drizzle-orm"
+import { imageTagPulls, projects, repositories } from "@/lib/db/schema"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
-import { canWrite, validRepositoryName } from "@/lib/permissions"
 import { repositoryIdentity, validImageRepository } from "@/lib/image-names"
+import { canWrite, validRepositoryName } from "@/lib/permissions"
 import { listRepositories } from "@/lib/registry"
 import { withImageResource } from "@/lib/resource-locks"
-import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 
 export const dynamic = "force-dynamic"
 
@@ -35,10 +36,16 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request)
     const user = await requireUser()
-    if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
+    if (!canWrite(user))
+      throw new HttpError(
+        403,
+        "Maintainer or administrator access is required.",
+      )
     const input = z
       .object({
-        name: z.string().refine(validRepositoryName, "Invalid repository name."),
+        name: z
+          .string()
+          .refine(validRepositoryName, "Invalid repository name."),
         description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).default(""),
         visibility: z.enum(["public", "private"]),
       })
@@ -71,19 +78,29 @@ export async function POST(request: Request) {
             "This project was deleted. Recreate the project before adding an image.",
           )
         if (project.visibility === "private" && input.visibility === "public")
-          throw new HttpError(400, "Images in a private project must be private.")
+          throw new HttpError(
+            400,
+            "Images in a private project must be private.",
+          )
       }
       const [image] = await tx
         .insert(repositories)
         .values(input)
         .onConflictDoUpdate({
           target: repositories.name,
-          set: { ...input, deletedAt: null, updatedAt: new Date(), pullCountsResetAt: new Date() },
+          set: {
+            ...input,
+            deletedAt: null,
+            updatedAt: new Date(),
+            pullCountsResetAt: new Date(),
+          },
           setWhere: isNotNull(repositories.deletedAt),
         })
         .returning()
       if (image && previous?.deletedAt)
-        await tx.delete(imageTagPulls).where(eq(imageTagPulls.repositoryName, input.name))
+        await tx
+          .delete(imageTagPulls)
+          .where(eq(imageTagPulls.repositoryName, input.name))
       return image
     })
     if (!created)
@@ -91,7 +108,9 @@ export async function POST(request: Request) {
         409,
         "This repository is already configured. Edit it from its detail page.",
       )
-    await audit(user.username, "repository.create", input.name, { visibility: input.visibility })
+    await audit(user.username, "repository.create", input.name, {
+      visibility: input.visibility,
+    })
     return NextResponse.json(created, { status: 201 })
   } catch (error) {
     return apiError(error)

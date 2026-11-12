@@ -5,7 +5,9 @@ import { promisify } from "node:util"
 import { describe, expect, it } from "vitest"
 
 const execute = promisify(execFile)
-const script = fileURLToPath(new URL("../../deploy/ingress-entrypoint.sh", import.meta.url))
+const script = fileURLToPath(
+  new URL("../../deploy/ingress-entrypoint.sh", import.meta.url),
+)
 
 function render(env: Record<string, string> = {}) {
   return execute("/bin/sh", [script, "--print-config"], {
@@ -58,13 +60,22 @@ describe("environment-driven ingress configuration", () => {
   })
 
   it("keeps the HTTP-only Compose gateway independent of APP_URL", async () => {
-    const compose = await readFile(new URL("../../deploy/compose.yaml", import.meta.url), "utf8")
-    const line = compose.split("\n").find((value) => value.trim().startsWith("INGRESS_PUBLIC_URL:"))
-    expect(line).toBe("      INGRESS_PUBLIC_URL: ${INGRESS_PUBLIC_URL:-http://localhost:3000}")
+    const compose = await readFile(
+      new URL("../../deploy/compose.yaml", import.meta.url),
+      "utf8",
+    )
+    const line = compose
+      .split("\n")
+      .find((value) => value.trim().startsWith("INGRESS_PUBLIC_URL:"))
+    expect(line).toBe(
+      "      INGRESS_PUBLIC_URL: ${INGRESS_PUBLIC_URL:-http://localhost:3000}",
+    )
   })
 
   it("enables managed HTTPS and redirects to the full public origin, including custom ports", async () => {
-    const { stdout } = await render({ INGRESS_PUBLIC_URL: "https://dockyard.example.com:8443/" })
+    const { stdout } = await render({
+      INGRESS_PUBLIC_URL: "https://dockyard.example.com:8443/",
+    })
     expect(stdout).toContain("auto_https disable_redirects")
     expect(stdout).toContain("https://dockyard.example.com {")
     expect(stdout).toContain("redir https://dockyard.example.com:8443{uri} 308")
@@ -106,10 +117,15 @@ describe("environment-driven ingress configuration", () => {
   })
 
   it("also validates the public origin and registry endpoint", async () => {
-    await expect(render({ INGRESS_PUBLIC_URL: "https://example.com/other" })).rejects.toMatchObject(
-      { code: 1, stderr: expect.stringContaining("INGRESS_PUBLIC_URL must be") },
-    )
-    await expect(render({ REGISTRY_UPSTREAM_URL: "http://registry:99999" })).rejects.toMatchObject({
+    await expect(
+      render({ INGRESS_PUBLIC_URL: "https://example.com/other" }),
+    ).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("INGRESS_PUBLIC_URL must be"),
+    })
+    await expect(
+      render({ REGISTRY_UPSTREAM_URL: "http://registry:99999" }),
+    ).rejects.toMatchObject({
       code: 1,
       stderr: expect.stringContaining("REGISTRY_UPSTREAM_URL must be"),
     })
@@ -117,7 +133,8 @@ describe("environment-driven ingress configuration", () => {
 
   it("does not echo rejected upstream credentials", async () => {
     const result = await render({
-      REGISTRY_UPSTREAM_URL: "https://user:private-password@registry.example.com",
+      REGISTRY_UPSTREAM_URL:
+        "https://user:private-password@registry.example.com",
     }).catch((error: { code: number; stdout: string; stderr: string }) => error)
     expect(result).toMatchObject({ code: 1 })
     expect(`${result.stdout}${result.stderr}`).not.toContain("private-password")

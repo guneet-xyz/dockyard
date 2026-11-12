@@ -7,7 +7,8 @@ const app = process.env.TEST_APP_URL ?? "http://localhost:3000"
 const registry = process.env.TEST_REGISTRY_URL ?? app
 const username = process.env.TEST_ADMIN_USERNAME ?? "admin"
 const password = process.env.TEST_ADMIN_PASSWORD
-if (!password) throw new Error("Set TEST_ADMIN_PASSWORD to run integration checks.")
+if (!password)
+  throw new Error("Set TEST_ADMIN_PASSWORD to run integration checks.")
 const suffix = Date.now().toString(36)
 const viewer = `viewer-${suffix}`
 const maintainer = `maintainer-${suffix}`
@@ -41,7 +42,10 @@ async function browser(
   })
 }
 async function login(name: string, pass: string) {
-  const response = await browser("/api/auth/login", "POST", { username: name, password: pass })
+  const response = await browser("/api/auth/login", "POST", {
+    username: name,
+    password: pass,
+  })
   const cookie = response.headers.getSetCookie()[0]?.split(";")[0]
   await check(response, 200, `Login ${name}`)
   assert.ok(cookie)
@@ -52,7 +56,9 @@ async function token(scope: string, name?: string, pass = testPassword) {
     `${app}/api/registry/token?service=dockyard-registry&scope=${encodeURIComponent(scope)}`,
     {
       headers: name
-        ? { Authorization: `Basic ${Buffer.from(`${name}:${pass}`).toString("base64")}` }
+        ? {
+            Authorization: `Basic ${Buffer.from(`${name}:${pass}`).toString("base64")}`,
+          }
         : {},
     },
   )
@@ -83,7 +89,8 @@ async function registryCall(
     headers: {
       Authorization: `Bearer ${bearer}`,
       "Content-Type": type,
-      Accept: "application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json",
+      Accept:
+        "application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json",
     },
     body,
     ...(body instanceof ReadableStream ? { duplex: "half" as const } : {}),
@@ -94,7 +101,10 @@ async function registryCall(
 function uploadLocation(response: Response) {
   const header = response.headers.get("location")
   assert.ok(header, "Upload response must include a Location header")
-  assert.ok(header.startsWith("/v2/"), "Upload Location must stay relative to the ingress origin")
+  assert.ok(
+    header.startsWith("/v2/"),
+    "Upload Location must stay relative to the ingress origin",
+  )
   const location = new URL(header, registry)
   assert.equal(location.origin, new URL(registry).origin)
   assertions += 3
@@ -103,7 +113,11 @@ function uploadLocation(response: Response) {
 
 async function uploadBlob(name: string, bearer: string, body: string) {
   const digest = `sha256:${createHash("sha256").update(body).digest("hex")}`
-  const upload = await registryCall(`/v2/${name}/blobs/uploads/`, bearer, "POST")
+  const upload = await registryCall(
+    `/v2/${name}/blobs/uploads/`,
+    bearer,
+    "POST",
+  )
   await check(upload.clone(), 202, "Start blob upload through ingress")
   const location = uploadLocation(upload)
   location.searchParams.set("digest", digest)
@@ -124,10 +138,19 @@ async function uploadBlob(name: string, bearer: string, body: string) {
 async function main() {
   await check(await browser("/api/health"), 200, "Stack health")
   const challenge = await fetch(`${registry}/v2/`)
-  await check(challenge.clone(), 401, "Registry challenge through public ingress")
-  assert.equal(challenge.headers.get("Docker-Distribution-Api-Version"), "registry/2.0")
+  await check(
+    challenge.clone(),
+    401,
+    "Registry challenge through public ingress",
+  )
+  assert.equal(
+    challenge.headers.get("Docker-Distribution-Api-Version"),
+    "registry/2.0",
+  )
   assert.ok(
-    challenge.headers.get("WWW-Authenticate")?.includes(`realm="${app}/api/registry/token"`),
+    challenge.headers
+      .get("WWW-Authenticate")
+      ?.includes(`realm="${app}/api/registry/token"`),
     "Registry must advertise the web token endpoint on the public origin",
   )
   assertions += 2
@@ -149,14 +172,23 @@ async function main() {
     401,
     "A web admin session cannot bypass registry token authentication",
   )
-  const session = await check(await browser("/api/auth/me"), 200, "Public registry hostname")
+  const session = await check(
+    await browser("/api/auth/me"),
+    200,
+    "Public registry hostname",
+  )
   assert.equal(session.registryHost, new URL(registry).host)
   assertions++
   await check(
     await browser(
       "/api/users",
       "POST",
-      { name: "Smoke viewer", username: viewer, password: testPassword, role: "viewer" },
+      {
+        name: "Smoke viewer",
+        username: viewer,
+        password: testPassword,
+        role: "viewer",
+      },
       adminCookie,
     ),
     201,
@@ -184,7 +216,12 @@ async function main() {
     "Viewer admin API blocked",
   )
   await check(
-    await browser("/api/repositories", "POST", { name: repo, visibility: "public" }, viewerCookie),
+    await browser(
+      "/api/repositories",
+      "POST",
+      { name: repo, visibility: "public" },
+      viewerCookie,
+    ),
     403,
     "Viewer repository write blocked",
   )
@@ -209,7 +246,11 @@ async function main() {
     201,
     "Reserve private repository",
   )
-  const projectList = await check(await browser("/api/projects"), 200, "Guest project list")
+  const projectList = await check(
+    await browser("/api/projects"),
+    200,
+    "Guest project list",
+  )
   assert.ok(
     projectList.projects.some(
       (project: { name: string; imageCount: number }) =>
@@ -231,7 +272,11 @@ async function main() {
     await browser(
       "/api/projects",
       "POST",
-      { name: protectedProject, visibility: "private", description: "Private project test" },
+      {
+        name: protectedProject,
+        visibility: "private",
+        description: "Private project test",
+      },
       maintainerCookie,
     ),
     201,
@@ -243,7 +288,12 @@ async function main() {
     "Private project hidden from guests",
   )
   await check(
-    await browser(`/api/projects/${protectedProject}`, "GET", undefined, viewerCookie),
+    await browser(
+      `/api/projects/${protectedProject}`,
+      "GET",
+      undefined,
+      viewerCookie,
+    ),
     200,
     "Viewer can browse private project",
   )
@@ -272,7 +322,10 @@ async function main() {
     await browser(
       "/api/keys",
       "POST",
-      { name: "viewer-write", grants: [{ type: "image", target: repo, actions: ["push"] }] },
+      {
+        name: "viewer-write",
+        grants: [{ type: "image", target: repo, actions: ["push"] }],
+      },
       viewerCookie,
     ),
     403,
@@ -284,7 +337,9 @@ async function main() {
       "POST",
       {
         name: "unknown-project",
-        grants: [{ type: "project", target: `missing-${suffix}`, actions: ["pull"] }],
+        grants: [
+          { type: "project", target: `missing-${suffix}`, actions: ["pull"] },
+        ],
       },
       maintainerCookie,
     ),
@@ -337,7 +392,13 @@ async function main() {
       "POST",
       {
         name: `project-release-${suffix}`,
-        grants: [{ type: "project", target: `smoke-${suffix}`, actions: ["pull", "push"] }],
+        grants: [
+          {
+            type: "project",
+            target: `smoke-${suffix}`,
+            actions: ["pull", "push"],
+          },
+        ],
       },
       maintainerCookie,
     ),
@@ -362,11 +423,16 @@ async function main() {
     200,
     "Viewer lists own key metadata",
   )
-  assert.ok(viewerKeys.keys.some((key: { id: string }) => key.id === viewerKey.id))
-  assert.ok(!viewerKeys.keys.some((key: { id: string }) => key.id === imageKey.id))
+  assert.ok(
+    viewerKeys.keys.some((key: { id: string }) => key.id === viewerKey.id),
+  )
+  assert.ok(
+    !viewerKeys.keys.some((key: { id: string }) => key.id === imageKey.id),
+  )
   assert.ok(
     viewerKeys.keys.every(
-      (key: Record<string, unknown>) => !("secret" in key) && !("secretHash" in key),
+      (key: Record<string, unknown>) =>
+        !("secret" in key) && !("secretHash" in key),
     ),
   )
   assertions += 3
@@ -376,7 +442,9 @@ async function main() {
     "Other user's key cannot be revoked",
   )
   await check(
-    await fetch(`${app}/api/keys`, { headers: { Authorization: `Bearer ${imageKey.secret}` } }),
+    await fetch(`${app}/api/keys`, {
+      headers: { Authorization: `Bearer ${imageKey.secret}` },
+    }),
     401,
     "Registry keys cannot mint or list keys through web APIs",
   )
@@ -394,7 +462,8 @@ async function main() {
     imageKey.secret,
   )
   assert.deepEqual(
-    JSON.parse(Buffer.from(imageKeyToken.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(imageKeyToken.split(".")[1], "base64url").toString())
+      .access[0].actions,
     ["pull", "push"],
   )
   assertions++
@@ -404,12 +473,17 @@ async function main() {
     imageKey.secret,
   )
   assert.deepEqual(
-    JSON.parse(Buffer.from(outsideImage.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(outsideImage.split(".")[1], "base64url").toString())
+      .access[0].actions,
     [],
   )
   assertions++
   await check(
-    await registryCall(`/v2/${privateRepo}/blobs/uploads/`, outsideImage, "POST"),
+    await registryCall(
+      `/v2/${privateRepo}/blobs/uploads/`,
+      outsideImage,
+      "POST",
+    ),
     401,
     "Image key cannot push a sibling image",
   )
@@ -419,7 +493,8 @@ async function main() {
     imageKey.secret,
   )
   assert.deepEqual(
-    JSON.parse(Buffer.from(outsidePublic.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(outsidePublic.split(".")[1], "base64url").toString())
+      .access[0].actions,
     [],
   )
   assertions++
@@ -429,7 +504,11 @@ async function main() {
     projectKey.secret,
   )
   await check(
-    await registryCall(`/v2/smoke-${suffix}/future/blobs/uploads/`, futureToken, "POST"),
+    await registryCall(
+      `/v2/smoke-${suffix}/future/blobs/uploads/`,
+      futureToken,
+      "POST",
+    ),
     202,
     "Project key can push a future image",
   )
@@ -439,24 +518,41 @@ async function main() {
     projectKey.secret,
   )
   await check(
-    await registryCall(`/v2/${protectedProject}/other/blobs/uploads/`, otherProject, "POST"),
+    await registryCall(
+      `/v2/${protectedProject}/other/blobs/uploads/`,
+      otherProject,
+      "POST",
+    ),
     401,
     "Project key cannot cross namespaces",
   )
-  const keyCatalog = await token("registry:catalog:*", adminKey.username, adminKey.secret)
+  const keyCatalog = await token(
+    "registry:catalog:*",
+    adminKey.username,
+    adminKey.secret,
+  )
   await check(
     await registryCall("/v2/_catalog", keyCatalog),
     401,
     "Admin-owned keys cannot obtain raw catalog privileges",
   )
-  await rejectedKey(imageKey.username, `${imageKey.secret}wrong`, "Wrong key secret rejected")
+  await rejectedKey(
+    imageKey.username,
+    `${imageKey.secret}wrong`,
+    "Wrong key secret rejected",
+  )
   await check(
     await browser(`/api/keys/${imageKey.id}/rotate`, "POST"),
     401,
     "Guests cannot rotate keys",
   )
   await check(
-    await browser(`/api/keys/${imageKey.id}/rotate`, "POST", undefined, viewerCookie),
+    await browser(
+      `/api/keys/${imageKey.id}/rotate`,
+      "POST",
+      undefined,
+      viewerCookie,
+    ),
     404,
     "Other users cannot rotate keys",
   )
@@ -480,12 +576,22 @@ async function main() {
     "Rotation requires Origin",
   )
   await check(
-    await browser("/api/keys/not-a-uuid/rotate", "POST", undefined, maintainerCookie),
+    await browser(
+      "/api/keys/not-a-uuid/rotate",
+      "POST",
+      undefined,
+      maintainerCookie,
+    ),
     400,
     "Invalid rotation ID rejected",
   )
   await check(
-    await browser(`/api/keys/${randomUUID()}/rotate`, "POST", undefined, maintainerCookie),
+    await browser(
+      `/api/keys/${randomUUID()}/rotate`,
+      "POST",
+      undefined,
+      maintainerCookie,
+    ),
     404,
     "Missing rotation key rejected",
   )
@@ -518,9 +624,18 @@ async function main() {
   assert.equal(rotationResponse.headers.get("cache-control"), "no-store")
   assertions++
   const rotated = await check(rotationResponse, 200, "Owner rotates image key")
-  assert.deepEqual({ ...rotated, secret: undefined }, { ...imageKey, secret: undefined })
-  assert.ok(rotated.secret !== originalSecret, "Rotation must produce a different secret")
-  assert.ok(!("secretHash" in rotated), "Rotation must not return the stored hash")
+  assert.deepEqual(
+    { ...rotated, secret: undefined },
+    { ...imageKey, secret: undefined },
+  )
+  assert.ok(
+    rotated.secret !== originalSecret,
+    "Rotation must produce a different secret",
+  )
+  assert.ok(
+    !("secretHash" in rotated),
+    "Rotation must not return the stored hash",
+  )
   assertions += 3
   const keysAfterRotation = await check(
     await browser("/api/keys", "GET", undefined, maintainerCookie),
@@ -533,12 +648,22 @@ async function main() {
   assert.ok(rotatedMetadata.rotatedAt)
   assert.equal(rotatedMetadata.lastUsedAt, null)
   assert.deepEqual(
-    { ...rotatedMetadata, rotatedAt: null, lastUsedAt: originalMetadata.lastUsedAt },
+    {
+      ...rotatedMetadata,
+      rotatedAt: null,
+      lastUsedAt: originalMetadata.lastUsedAt,
+    },
     originalMetadata,
   )
-  assert.ok(!("secret" in rotatedMetadata) && !("secretHash" in rotatedMetadata))
+  assert.ok(
+    !("secret" in rotatedMetadata) && !("secretHash" in rotatedMetadata),
+  )
   assertions += 4
-  await rejectedKey(imageKey.username, originalSecret, "Old secret rejected after rotation")
+  await rejectedKey(
+    imageKey.username,
+    originalSecret,
+    "Old secret rejected after rotation",
+  )
   imageKey.secret = rotated.secret
   const replacementToken = await token(
     `repository:${repo}:pull,push,delete`,
@@ -558,7 +683,11 @@ async function main() {
   )
   // Rotation is also an authenticated recovery path for a locked-out active credential.
   for (let attempt = 0; attempt < 20; attempt++)
-    await rejectedKey(viewerKey.username, "dk_wrong", "Wrong viewer secret rejected")
+    await rejectedKey(
+      viewerKey.username,
+      "dk_wrong",
+      "Wrong viewer secret rejected",
+    )
   await check(
     await fetch(`${app}/api/registry/token?service=dockyard-registry`, {
       headers: {
@@ -569,14 +698,26 @@ async function main() {
     "Key authentication rate limit enforced",
   )
   const rotatedViewerKey = await check(
-    await browser(`/api/keys/${viewerKey.id}/rotate`, "POST", undefined, viewerCookie),
+    await browser(
+      `/api/keys/${viewerKey.id}/rotate`,
+      "POST",
+      undefined,
+      viewerCookie,
+    ),
     200,
     "Viewer rotates own key and clears attempt limit",
   )
-  assert.deepEqual({ ...rotatedViewerKey, secret: undefined }, { ...viewerKey, secret: undefined })
+  assert.deepEqual(
+    { ...rotatedViewerKey, secret: undefined },
+    { ...viewerKey, secret: undefined },
+  )
   assertions++
   viewerKey.secret = rotatedViewerKey.secret
-  await token(`repository:${privateRepo}:pull`, viewerKey.username, viewerKey.secret)
+  await token(
+    `repository:${privateRepo}:pull`,
+    viewerKey.username,
+    viewerKey.secret,
+  )
   const rotatedProjectKey = await check(
     await browser(
       `/api/keys/${projectKey.id.toUpperCase()}/rotate`,
@@ -598,7 +739,11 @@ async function main() {
     "Admin rotation invalidates previous project secret",
   )
   projectKey.secret = rotatedProjectKey.secret
-  await token(`repository:${repo}:pull,push`, projectKey.username, projectKey.secret)
+  await token(
+    `repository:${repo}:pull,push`,
+    projectKey.username,
+    projectKey.secret,
+  )
   const concurrentKey = await check(
     await browser(
       "/api/keys",
@@ -616,7 +761,12 @@ async function main() {
   const parallelRotations = await Promise.all(
     [0, 1].map(async () =>
       check(
-        await browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+        await browser(
+          `/api/keys/${concurrentKey.id}/rotate`,
+          "POST",
+          undefined,
+          maintainerCookie,
+        ),
         200,
         "Concurrent rotation commits atomically",
       ),
@@ -624,7 +774,8 @@ async function main() {
   )
   assert.ok(
     parallelRotations.every(
-      (key) => key.expiresAt === null && key.username === concurrentKey.username,
+      (key) =>
+        key.expiresAt === null && key.username === concurrentKey.username,
     ),
   )
   const parallelAuthentication = await Promise.all(
@@ -643,7 +794,12 @@ async function main() {
   )
   assertions += 2
   const racingResponses = await Promise.all([
-    browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    browser(
+      `/api/keys/${concurrentKey.id}/rotate`,
+      "POST",
+      undefined,
+      maintainerCookie,
+    ),
     browser(`/api/keys/${concurrentKey.id}`, "DELETE", undefined, adminCookie),
   ])
   assert.ok([200, 409].includes(racingResponses[0].status))
@@ -657,7 +813,12 @@ async function main() {
       "Concurrent rotation cannot revive a revoked key",
     )
   await check(
-    await browser(`/api/keys/${concurrentKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    await browser(
+      `/api/keys/${concurrentKey.id}/rotate`,
+      "POST",
+      undefined,
+      maintainerCookie,
+    ),
     409,
     "Revoked concurrent key remains unrotatable",
   )
@@ -681,14 +842,28 @@ async function main() {
     expiringKey.username,
     expiringKey.secret,
   )
-  const expiryClaims = JSON.parse(Buffer.from(expiringToken.split(".")[1], "base64url").toString())
-  assert.ok(expiryClaims.exp <= Math.floor(new Date(expiringKey.expiresAt).getTime() / 1000))
+  const expiryClaims = JSON.parse(
+    Buffer.from(expiringToken.split(".")[1], "base64url").toString(),
+  )
+  assert.ok(
+    expiryClaims.exp <=
+      Math.floor(new Date(expiringKey.expiresAt).getTime() / 1000),
+  )
   assert.ok(expiryClaims.exp - expiryClaims.iat < 300)
   assertions += 2
   await new Promise((resolve) => setTimeout(resolve, 4500))
-  await rejectedKey(expiringKey.username, expiringKey.secret, "Expired key authentication rejected")
+  await rejectedKey(
+    expiringKey.username,
+    expiringKey.secret,
+    "Expired key authentication rejected",
+  )
   await check(
-    await browser(`/api/keys/${expiringKey.id}/rotate`, "POST", undefined, maintainerCookie),
+    await browser(
+      `/api/keys/${expiringKey.id}/rotate`,
+      "POST",
+      undefined,
+      maintainerCookie,
+    ),
     409,
     "Expired keys cannot rotate",
   )
@@ -697,9 +872,18 @@ async function main() {
     200,
     "Revoke scoped admin key",
   )
-  await rejectedKey(adminKey.username, adminKey.secret, "Revoked key authentication rejected")
+  await rejectedKey(
+    adminKey.username,
+    adminKey.secret,
+    "Revoked key authentication rejected",
+  )
   await check(
-    await browser(`/api/keys/${adminKey.id}/rotate`, "POST", undefined, adminCookie),
+    await browser(
+      `/api/keys/${adminKey.id}/rotate`,
+      "POST",
+      undefined,
+      adminCookie,
+    ),
     409,
     "Revoked keys cannot rotate",
   )
@@ -723,21 +907,39 @@ async function main() {
     400,
     "New unscoped API images rejected",
   )
-  const nestedToken = await token(`repository:smoke-${suffix}/nested/image:push`, maintainer)
+  const nestedToken = await token(
+    `repository:smoke-${suffix}/nested/image:push`,
+    maintainer,
+  )
   await check(
-    await registryCall(`/v2/smoke-${suffix}/nested/image/blobs/uploads/`, nestedToken, "POST"),
+    await registryCall(
+      `/v2/smoke-${suffix}/nested/image/blobs/uploads/`,
+      nestedToken,
+      "POST",
+    ),
     401,
     "New deeply nested Docker images cannot bypass naming policy",
   )
-  const flatToken = await token(`repository:unscoped-${suffix}:push`, maintainer)
+  const flatToken = await token(
+    `repository:unscoped-${suffix}:push`,
+    maintainer,
+  )
   await check(
-    await registryCall(`/v2/unscoped-${suffix}/blobs/uploads/`, flatToken, "POST"),
+    await registryCall(
+      `/v2/unscoped-${suffix}/blobs/uploads/`,
+      flatToken,
+      "POST",
+    ),
     401,
     "New unscoped Docker images cannot bypass naming policy",
   )
-  const protectedGuest = await token(`repository:${protectedProject}/new-image:pull`)
+  const protectedGuest = await token(
+    `repository:${protectedProject}/new-image:pull`,
+  )
   assert.deepEqual(
-    JSON.parse(Buffer.from(protectedGuest.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(
+      Buffer.from(protectedGuest.split(".")[1], "base64url").toString(),
+    ).access[0].actions,
     [],
   )
   assertions++
@@ -768,7 +970,8 @@ async function main() {
   )
   const hidden = await token(`repository:${repo}:pull`)
   assert.deepEqual(
-    JSON.parse(Buffer.from(hidden.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(hidden.split(".")[1], "base64url").toString())
+      .access[0].actions,
     [],
   )
   assertions++
@@ -782,18 +985,39 @@ async function main() {
     200,
     "Project can be reopened without rewriting image paths",
   )
-  const guestList = await check(await browser("/api/repositories"), 200, "Guest catalog")
-  assert.ok(guestList.repositories.some((item: { name: string }) => item.name === repo))
-  assert.ok(!guestList.repositories.some((item: { name: string }) => item.name === privateRepo))
+  const guestList = await check(
+    await browser("/api/repositories"),
+    200,
+    "Guest catalog",
+  )
+  assert.ok(
+    guestList.repositories.some((item: { name: string }) => item.name === repo),
+  )
+  assert.ok(
+    !guestList.repositories.some(
+      (item: { name: string }) => item.name === privateRepo,
+    ),
+  )
   assertions += 2
-  await check(await browser(`/api/repositories/${privateRepo}`), 404, "Guest private detail hidden")
   await check(
-    await browser(`/api/repositories/${privateRepo}`, "GET", undefined, viewerCookie),
+    await browser(`/api/repositories/${privateRepo}`),
+    404,
+    "Guest private detail hidden",
+  )
+  await check(
+    await browser(
+      `/api/repositories/${privateRepo}`,
+      "GET",
+      undefined,
+      viewerCookie,
+    ),
     200,
     "Viewer private detail allowed",
   )
   const guestToken = await token(`repository:${repo}:pull,push,delete`)
-  const guestClaims = JSON.parse(Buffer.from(guestToken.split(".")[1], "base64url").toString())
+  const guestClaims = JSON.parse(
+    Buffer.from(guestToken.split(".")[1], "base64url").toString(),
+  )
   assert.deepEqual(guestClaims.access[0].actions, ["pull"])
   assertions++
   await check(
@@ -815,7 +1039,10 @@ async function main() {
     401,
     "Ingress preserves signatures: a forged push grant is rejected",
   )
-  const pushToken = await token(`repository:${repo}:pull,push,delete`, maintainer)
+  const pushToken = await token(
+    `repository:${repo}:pull,push,delete`,
+    maintainer,
+  )
   const config = JSON.stringify({
     architecture: "arm64",
     os: "linux",
@@ -868,7 +1095,11 @@ async function main() {
   // Exercise streaming request bodies, PATCH/PUT continuation, HEAD, and range responses.
   const bytes = randomBytes(8 * 1024 * 1024)
   const largeDigest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`
-  const started = await registryCall(`/v2/${repo}/blobs/uploads/`, pushToken, "POST")
+  const started = await registryCall(
+    `/v2/${repo}/blobs/uploads/`,
+    pushToken,
+    "POST",
+  )
   await check(started.clone(), 202, "Start large streaming upload")
   let location = uploadLocation(started)
   let offset = 0
@@ -903,7 +1134,10 @@ async function main() {
     201,
     "Complete streamed upload",
   )
-  const downloaded = await registryCall(`/v2/${repo}/blobs/${largeDigest}`, guestToken)
+  const downloaded = await registryCall(
+    `/v2/${repo}/blobs/${largeDigest}`,
+    guestToken,
+  )
   assert.equal(downloaded.status, 200)
   assert.equal(
     `sha256:${createHash("sha256")
@@ -912,21 +1146,31 @@ async function main() {
     largeDigest,
   )
   assertions += 2
-  const head = await registryCall(`/v2/${repo}/blobs/${largeDigest}`, guestToken, "HEAD")
+  const head = await registryCall(
+    `/v2/${repo}/blobs/${largeDigest}`,
+    guestToken,
+    "HEAD",
+  )
   await check(head, 200, "HEAD through registry ingress")
   assert.equal(Number(head.headers.get("content-length")), bytes.length)
   const range = await fetch(`${registry}/v2/${repo}/blobs/${largeDigest}`, {
     headers: { Authorization: `Bearer ${guestToken}`, Range: "bytes=0-1023" },
   })
   assert.equal(range.status, 206)
-  assert.equal(range.headers.get("content-range"), `bytes 0-1023/${bytes.length}`)
+  assert.equal(
+    range.headers.get("content-range"),
+    `bytes 0-1023/${bytes.length}`,
+  )
   assert.deepEqual(
     new Uint8Array(await range.arrayBuffer()),
     new Uint8Array(bytes.subarray(0, 1024)),
   )
   assertions += 4
 
-  const privatePush = await token(`repository:${privateRepo}:pull,push,delete`, maintainer)
+  const privatePush = await token(
+    `repository:${privateRepo}:pull,push,delete`,
+    maintainer,
+  )
   await uploadBlob(privateRepo, privatePush, config)
   await check(
     await registryCall(
@@ -956,11 +1200,18 @@ async function main() {
     "Viewer-owned key pulls the exact private image",
   )
   await check(
-    await registryCall(`/v2/${privateRepo}/blobs/uploads/`, viewerKeyToken, "POST"),
+    await registryCall(
+      `/v2/${privateRepo}/blobs/uploads/`,
+      viewerKeyToken,
+      "POST",
+    ),
     401,
     "Viewer key cannot push",
   )
-  const protectedPush = await token(`repository:${protectedProject}/web:pull,push`, maintainer)
+  const protectedPush = await token(
+    `repository:${protectedProject}/web:pull,push`,
+    maintainer,
+  )
   await uploadBlob(`${protectedProject}/web`, protectedPush, config)
   await check(
     await registryCall(
@@ -973,15 +1224,24 @@ async function main() {
     201,
     "CLI push inherits an existing private project",
   )
-  const protectedRead = await token(`repository:${protectedProject}/web:pull`, viewer)
+  const protectedRead = await token(
+    `repository:${protectedProject}/web:pull`,
+    viewer,
+  )
   await check(
-    await registryCall(`/v2/${protectedProject}/web/manifests/latest`, protectedRead),
+    await registryCall(
+      `/v2/${protectedProject}/web/manifests/latest`,
+      protectedRead,
+    ),
     200,
     "Authenticated viewer reads a project-private CLI image",
   )
   const noProtectedRead = await token(`repository:${protectedProject}/web:pull`)
   await check(
-    await registryCall(`/v2/${protectedProject}/web/manifests/latest`, noProtectedRead),
+    await registryCall(
+      `/v2/${protectedProject}/web/manifests/latest`,
+      noProtectedRead,
+    ),
     401,
     "Guest cannot pull a newly pushed project-private image",
   )
@@ -993,7 +1253,11 @@ async function main() {
   assert.equal(detail.images[0].platforms[0], "linux/arm64")
   assertions++
   await check(
-    await registryCall(`/v2/${repo}/manifests/${detail.images[0].digest}`, imageKeyToken, "DELETE"),
+    await registryCall(
+      `/v2/${repo}/manifests/${detail.images[0].digest}`,
+      imageKeyToken,
+      "DELETE",
+    ),
     401,
     "Push permission does not implicitly allow deletion",
   )
@@ -1018,7 +1282,9 @@ async function main() {
     "Maintainer deletes manifest",
   )
   const privateGuest = await token(`repository:${privateRepo}:pull`)
-  const claims = JSON.parse(Buffer.from(privateGuest.split(".")[1], "base64url").toString())
+  const claims = JSON.parse(
+    Buffer.from(privateGuest.split(".")[1], "base64url").toString(),
+  )
   assert.deepEqual(claims.access[0].actions, [])
   assertions++
   await check(
@@ -1034,14 +1300,19 @@ async function main() {
   )
   const uploadProject = `upload-${suffix}`
   const uploadImage = `${uploadProject}/app`
-  const projectDescription = `Release workspace\n${"Long project usage notes. ".repeat(35)}`.trim()
+  const projectDescription =
+    `Release workspace\n${"Long project usage notes. ".repeat(35)}`.trim()
   const imageDescription =
     `Container usage\n${"Image documentation and configuration. ".repeat(30)}`.trim()
   await check(
     await browser(
       "/api/projects",
       "POST",
-      { name: uploadProject, visibility: "public", description: projectDescription },
+      {
+        name: uploadProject,
+        visibility: "public",
+        description: projectDescription,
+      },
       maintainerCookie,
     ),
     201,
@@ -1106,7 +1377,12 @@ async function main() {
     "Edit project description without visibility changes",
   )
   await check(
-    await browser(`/api/projects/${uploadProject}`, "PATCH", {}, maintainerCookie),
+    await browser(
+      `/api/projects/${uploadProject}`,
+      "PATCH",
+      {},
+      maintainerCookie,
+    ),
     400,
     "Empty settings changes rejected",
   )
@@ -1164,14 +1440,24 @@ async function main() {
       body: new Uint8Array(bytes),
     })
   }
-  await check(await uploadPhoto("image", uploadImage, photo), 401, "Guests cannot upload photos")
+  await check(
+    await uploadPhoto("image", uploadImage, photo),
+    401,
+    "Guests cannot upload photos",
+  )
   await check(
     await uploadPhoto("image", uploadImage, photo, viewerCookie),
     403,
     "Viewers cannot upload photos",
   )
   await check(
-    await uploadPhoto("image", uploadImage, photo, maintainerCookie, "http://evil.example"),
+    await uploadPhoto(
+      "image",
+      uploadImage,
+      photo,
+      maintainerCookie,
+      "http://evil.example",
+    ),
     403,
     "Cross-origin photo upload rejected",
   )
@@ -1179,14 +1465,21 @@ async function main() {
     await uploadPhoto(
       "image",
       uploadImage,
-      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'),
+      Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      ),
       maintainerCookie,
     ),
     400,
     "SVG/script uploads are rejected",
   )
   await check(
-    await uploadPhoto("image", uploadImage, Buffer.alloc(5 * 1024 ** 2 + 1), maintainerCookie),
+    await uploadPhoto(
+      "image",
+      uploadImage,
+      Buffer.alloc(5 * 1024 ** 2 + 1),
+      maintainerCookie,
+    ),
     413,
     "Oversized photos are rejected",
   )
@@ -1207,23 +1500,39 @@ async function main() {
     404,
     "Private logo URLs do not disclose data to guests",
   )
-  const allowedLogo = await browser(imagePhoto.logoUrl, "GET", undefined, viewerCookie)
+  const allowedLogo = await browser(
+    imagePhoto.logoUrl,
+    "GET",
+    undefined,
+    viewerCookie,
+  )
   assert.equal(allowedLogo.status, 200)
   assert.equal(allowedLogo.headers.get("content-type"), "image/webp")
   assert.equal(allowedLogo.headers.get("cache-control"), "private, no-store")
   assert.equal(allowedLogo.headers.get("x-content-type-options"), "nosniff")
-  const picture = await sharp(Buffer.from(await allowedLogo.arrayBuffer())).metadata()
+  const picture = await sharp(
+    Buffer.from(await allowedLogo.arrayBuffer()),
+  ).metadata()
   assert.equal(picture.width, 512)
   assert.equal(picture.height, 400)
   assertions += 6
   const logoDetail = await check(
-    await browser(`/api/repositories/${uploadImage}`, "GET", undefined, viewerCookie),
+    await browser(
+      `/api/repositories/${uploadImage}`,
+      "GET",
+      undefined,
+      viewerCookie,
+    ),
     200,
     "Repository DTO contains its logo URL",
   )
   assert.equal(logoDetail.repository.logoUrl, imagePhoto.logoUrl)
   assert.equal(logoDetail.repository.description, imageDescription)
-  assert.equal(logoDetail.repository.tagCount, 0, "Photo upload must not publish container tags")
+  assert.equal(
+    logoDetail.repository.tagCount,
+    0,
+    "Photo upload must not publish container tags",
+  )
   assertions += 3
   await check(
     await browser(
@@ -1250,16 +1559,30 @@ async function main() {
   assert.ok(changedPhoto.logoUrl !== imagePhoto.logoUrl)
   assertions++
   await check(
-    await browser(logoPath("image", uploadImage), "DELETE", undefined, viewerCookie),
+    await browser(
+      logoPath("image", uploadImage),
+      "DELETE",
+      undefined,
+      viewerCookie,
+    ),
     403,
     "Viewers cannot remove logos",
   )
   await check(
-    await browser(logoPath("image", uploadImage), "DELETE", undefined, maintainerCookie),
+    await browser(
+      logoPath("image", uploadImage),
+      "DELETE",
+      undefined,
+      maintainerCookie,
+    ),
     200,
     "Remove photo/logo",
   )
-  await check(await browser(changedPhoto.logoUrl), 404, "Removed logos are no longer served")
+  await check(
+    await browser(changedPhoto.logoUrl),
+    404,
+    "Removed logos are no longer served",
+  )
   await check(
     await browser(
       `/api/projects/${uploadProject}`,
@@ -1277,9 +1600,17 @@ async function main() {
   )
   const archiveEndpoint = await fetch(
     `${app}/api/registry/upload?name=${uploadImage}&tag=archive`,
-    { method: "POST", headers: { Origin: app, Cookie: maintainerCookie }, body: "archive" },
+    {
+      method: "POST",
+      headers: { Origin: app, Cookie: maintainerCookie },
+      body: "archive",
+    },
   )
-  assert.equal(archiveEndpoint.status, 404, "Mistaken container archive upload endpoint is removed")
+  assert.equal(
+    archiveEndpoint.status,
+    404,
+    "Mistaken container archive upload endpoint is removed",
+  )
   assertions++
 
   const pullProject = `pulls-${suffix}`
@@ -1304,7 +1635,10 @@ async function main() {
     201,
     "Create pull-count fixture image",
   )
-  const pullWriter = await token(`repository:${pullImage}:pull,push`, maintainer)
+  const pullWriter = await token(
+    `repository:${pullImage}:pull,push`,
+    maintainer,
+  )
   await uploadBlob(pullImage, pullWriter, config)
   const pullChild = `sha256:${createHash("sha256").update(manifest).digest("hex")}`
   await check(
@@ -1348,11 +1682,19 @@ async function main() {
     "UI metadata reads do not count as pulls",
   )
   assert.equal(beforePulls.repository.pullCount, 0)
-  assert.ok(beforePulls.images.every((image: { pullCount: number }) => image.pullCount === 0))
+  assert.ok(
+    beforePulls.images.every(
+      (image: { pullCount: number }) => image.pullCount === 0,
+    ),
+  )
   assertions += 2
   const externalPull = await token(`repository:${pullImage}:pull`)
   await check(
-    await registryCall(`/v2/${pullImage}/manifests/latest`, externalPull, "HEAD"),
+    await registryCall(
+      `/v2/${pullImage}/manifests/latest`,
+      externalPull,
+      "HEAD",
+    ),
     200,
     "HEAD tag lookup counts (Docker and containerd resolve tags this way)",
   )
@@ -1391,11 +1733,15 @@ async function main() {
   }
   const countedPulls = await waitForPulls(2)
   assert.equal(
-    countedPulls.images.find((image: { name: string }) => image.name === "latest").pullCount,
+    countedPulls.images.find(
+      (image: { name: string }) => image.name === "latest",
+    ).pullCount,
     1,
   )
   assert.equal(
-    countedPulls.images.find((image: { name: string }) => image.name === "stable").pullCount,
+    countedPulls.images.find(
+      (image: { name: string }) => image.name === "stable",
+    ).pullCount,
     1,
   )
   assertions += 2
@@ -1405,7 +1751,9 @@ async function main() {
     "Image listings include aggregate pull counts",
   )
   assert.equal(
-    pullOverview.repositories.find((image: { name: string }) => image.name === pullImage).pullCount,
+    pullOverview.repositories.find(
+      (image: { name: string }) => image.name === pullImage,
+    ).pullCount,
     2,
   )
   assertions++
@@ -1427,7 +1775,9 @@ async function main() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(authorized ? { Authorization: `Bearer ${process.env.REGISTRY_WEBHOOK_SECRET}` } : {}),
+          ...(authorized
+            ? { Authorization: `Bearer ${process.env.REGISTRY_WEBHOOK_SECRET}` }
+            : {}),
         },
         body: JSON.stringify({ events }),
       })
@@ -1442,22 +1792,38 @@ async function main() {
       200,
       "Duplicate IDs within one envelope are deduplicated",
     )
-    await check(await sendPullEvents([pullEvent]), 200, "Notification retries are idempotent")
+    await check(
+      await sendPullEvents([pullEvent]),
+      200,
+      "Notification retries are idempotent",
+    )
     const concurrent = { ...pullEvent, id: randomUUID() }
     await Promise.all(
       Array.from({ length: 4 }, async () =>
-        check(await sendPullEvents([concurrent]), 200, "Concurrent duplicate notification"),
+        check(
+          await sendPullEvents([concurrent]),
+          200,
+          "Concurrent duplicate notification",
+        ),
       ),
     )
-    const distinct = Array.from({ length: 8 }, () => ({ ...pullEvent, id: randomUUID() }))
+    const distinct = Array.from({ length: 8 }, () => ({
+      ...pullEvent,
+      id: randomUUID(),
+    }))
     await Promise.all(
       distinct.map(async (event) =>
-        check(await sendPullEvents([event]), 200, "Concurrent unique pulls increment atomically"),
+        check(
+          await sendPullEvents([event]),
+          200,
+          "Concurrent unique pulls increment atomically",
+        ),
       ),
     )
     const atomic = await waitForPulls(12)
     assert.equal(
-      atomic.images.find((image: { name: string }) => image.name === "stable").pullCount,
+      atomic.images.find((image: { name: string }) => image.name === "stable")
+        .pullCount,
       11,
     )
     assertions++
@@ -1477,8 +1843,9 @@ async function main() {
       "Republish a tag without resetting its named pull history",
     )
     assert.equal(
-      (await waitForPulls(12)).images.find((image: { name: string }) => image.name === "latest")
-        .pullCount,
+      (await waitForPulls(12)).images.find(
+        (image: { name: string }) => image.name === "latest",
+      ).pullCount,
       1,
     )
     assertions++
@@ -1503,8 +1870,9 @@ async function main() {
       "One client's HEAD then GET of the replacement tag is one pull",
     )
     assert.equal(
-      (await waitForPulls(13)).images.find((image: { name: string }) => image.name === "latest")
-        .pullCount,
+      (await waitForPulls(13)).images.find(
+        (image: { name: string }) => image.name === "latest",
+      ).pullCount,
       2,
     )
     assertions++
@@ -1517,8 +1885,9 @@ async function main() {
       "Lookups after the window or from another client count again",
     )
     assert.equal(
-      (await waitForPulls(15)).images.find((image: { name: string }) => image.name === "latest")
-        .pullCount,
+      (await waitForPulls(15)).images.find(
+        (image: { name: string }) => image.name === "latest",
+      ).pullCount,
       4,
     )
     assertions++
@@ -1529,7 +1898,11 @@ async function main() {
         id: randomUUID(),
         request: { method: "GET", useragent: "Dockyard/internal" },
       },
-      { ...pullEvent, id: randomUUID(), target: { ...pullEvent.target, tag: undefined } },
+      {
+        ...pullEvent,
+        id: randomUUID(),
+        target: { ...pullEvent.target, tag: undefined },
+      },
       {
         ...pullEvent,
         id: randomUUID(),
@@ -1559,7 +1932,12 @@ async function main() {
       "Private pull counts are not disclosed to guests",
     )
     await check(
-      await browser(`/api/repositories/${pullImage}`, "GET", undefined, viewerCookie),
+      await browser(
+        `/api/repositories/${pullImage}`,
+        "GET",
+        undefined,
+        viewerCookie,
+      ),
       200,
       "Authenticated viewer can see private counters",
     )
@@ -1626,9 +2004,18 @@ async function main() {
     201,
     "Create prefix-sharing neighboring project",
   )
-  for (const name of [deletingImage, indexImage, `${deletionProject}/reserved`]) {
+  for (const name of [
+    deletingImage,
+    indexImage,
+    `${deletionProject}/reserved`,
+  ]) {
     await check(
-      await browser("/api/repositories", "POST", { name, visibility: "private" }, maintainerCookie),
+      await browser(
+        "/api/repositories",
+        "POST",
+        { name, visibility: "private" },
+        maintainerCookie,
+      ),
       201,
       "Reserve deletion fixture image",
     )
@@ -1649,14 +2036,23 @@ async function main() {
       "POST",
       {
         name: `deletion-key-${suffix}`,
-        grants: [{ type: "project", target: deletionProject, actions: ["pull", "push", "delete"] }],
+        grants: [
+          {
+            type: "project",
+            target: deletionProject,
+            actions: ["pull", "push", "delete"],
+          },
+        ],
       },
       maintainerCookie,
     ),
     201,
     "Create key for deletion access checks",
   )
-  const deletingToken = await token(`repository:${deletingImage}:pull,push,delete`, maintainer)
+  const deletingToken = await token(
+    `repository:${deletingImage}:pull,push,delete`,
+    maintainer,
+  )
   await uploadBlob(deletingImage, deletingToken, config)
   for (const tag of ["latest", "stable", "previous"]) {
     const body =
@@ -1678,7 +2074,10 @@ async function main() {
       "Push root manifest and alias deletion fixtures",
     )
   }
-  const multiToken = await token(`repository:${indexImage}:pull,push,delete`, maintainer)
+  const multiToken = await token(
+    `repository:${indexImage}:pull,push,delete`,
+    maintainer,
+  )
   await uploadBlob(indexImage, multiToken, config)
   const childDigest = `sha256:${createHash("sha256").update(manifest).digest("hex")}`
   await check(
@@ -1717,7 +2116,9 @@ async function main() {
       "Push OCI index alias fixture",
     )
   await check(
-    await browser(`/api/repositories/${deletingImage}`, "DELETE", { confirmName: deletingImage }),
+    await browser(`/api/repositories/${deletingImage}`, "DELETE", {
+      confirmName: deletingImage,
+    }),
     401,
     "Guests cannot delete image repositories",
   )
@@ -1794,7 +2195,12 @@ async function main() {
     "Project deletion requires exact name confirmation",
   )
   await check(
-    await browser(`/api/repositories/${deletingImage}`, "DELETE", {}, maintainerCookie),
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "DELETE",
+      {},
+      maintainerCookie,
+    ),
     400,
     "Empty deletion body is not a bulk delete",
   )
@@ -1828,7 +2234,12 @@ async function main() {
   )
   assertions++
   await check(
-    await browser(`/api/repositories/${deletingImage}`, "GET", undefined, adminCookie),
+    await browser(
+      `/api/repositories/${deletingImage}`,
+      "GET",
+      undefined,
+      adminCookie,
+    ),
     404,
     "Deleted image details remain hidden from admins",
   )
@@ -1854,13 +2265,19 @@ async function main() {
           : testPassword,
     )
     assert.deepEqual(
-      JSON.parse(Buffer.from(scoped.split(".")[1], "base64url").toString()).access[0].actions,
+      JSON.parse(Buffer.from(scoped.split(".")[1], "base64url").toString())
+        .access[0].actions,
       [],
     )
     assertions++
   }
   await check(
-    await browser(`/api/projects/${deletionProject}`, "GET", undefined, maintainerCookie),
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "GET",
+      undefined,
+      maintainerCookie,
+    ),
     200,
     "Deleting one image leaves its project intact",
   )
@@ -1881,7 +2298,10 @@ async function main() {
     await check(
       await fetch(`${app}/api/registry/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${webhookSecret}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${webhookSecret}`,
+        },
         body: JSON.stringify({
           events: [
             {
@@ -1910,7 +2330,9 @@ async function main() {
     "Deleted image stays hidden after cached-token push and webhook",
   )
   assert.ok(
-    !afterLatePush.repositories.some((image: { name: string }) => image.name === deletingImage),
+    !afterLatePush.repositories.some(
+      (image: { name: string }) => image.name === deletingImage,
+    ),
   )
   assertions++
   await check(
@@ -1926,7 +2348,10 @@ async function main() {
   if (webhookSecret) {
     for (const legacy of [deletionProject, `${deletionProject}/legacy/deep`]) {
       await pushNotification(legacy)
-      const legacyToken = await token(`repository:${legacy}:pull,push`, maintainer)
+      const legacyToken = await token(
+        `repository:${legacy}:pull,push`,
+        maintainer,
+      )
       await uploadBlob(legacy, legacyToken, config)
       await check(
         await registryCall(
@@ -1942,7 +2367,10 @@ async function main() {
     }
   }
   const futureName = `${deletionProject}/late`
-  const futureDeletionToken = await token(`repository:${futureName}:pull,push`, maintainer)
+  const futureDeletionToken = await token(
+    `repository:${futureName}:pull,push`,
+    maintainer,
+  )
   const deletedProject = await check(
     await browser(
       `/api/projects/${deletionProject}`,
@@ -1957,7 +2385,12 @@ async function main() {
   assert.ok(deletedProject.deletedManifests >= 1)
   assertions += 2
   await check(
-    await browser(`/api/projects/${deletionProject}`, "GET", undefined, adminCookie),
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "GET",
+      undefined,
+      adminCookie,
+    ),
     404,
     "Deleted project detail is gone",
   )
@@ -1967,17 +2400,29 @@ async function main() {
     "Deleted projects do not reappear from Distribution catalog names",
   )
   assert.ok(
-    !projectCatalog.projects.some((project: { name: string }) => project.name === deletionProject),
+    !projectCatalog.projects.some(
+      (project: { name: string }) => project.name === deletionProject,
+    ),
   )
   assertions++
   await check(
-    await browser(`/api/repositories/${siblingProject}/safe`, "GET", undefined, maintainerCookie),
+    await browser(
+      `/api/repositories/${siblingProject}/safe`,
+      "GET",
+      undefined,
+      maintainerCookie,
+    ),
     200,
     "Prefix-sharing neighbor is not deleted",
   )
   if (webhookSecret)
     await check(
-      await browser(`/api/repositories/${deletionProject}`, "GET", undefined, maintainerCookie),
+      await browser(
+        `/api/repositories/${deletionProject}`,
+        "GET",
+        undefined,
+        maintainerCookie,
+      ),
       200,
       "Flat legacy image with matching project word is not a project member",
     )
@@ -1992,9 +2437,14 @@ async function main() {
     "Deleted project cannot be silently recreated by creating an image",
   )
   for (const name of [indexImage, futureName]) {
-    const closed = await token(`repository:${name}:pull,push,delete`, username, password!)
+    const closed = await token(
+      `repository:${name}:pull,push,delete`,
+      username,
+      password!,
+    )
     assert.deepEqual(
-      JSON.parse(Buffer.from(closed.split(".")[1], "base64url").toString()).access[0].actions,
+      JSON.parse(Buffer.from(closed.split(".")[1], "base64url").toString())
+        .access[0].actions,
       [],
     )
     assertions++
@@ -2013,7 +2463,12 @@ async function main() {
   )
   await pushNotification(futureName)
   await check(
-    await browser(`/api/repositories/${futureName}`, "GET", undefined, adminCookie),
+    await browser(
+      `/api/repositories/${futureName}`,
+      "GET",
+      undefined,
+      adminCookie,
+    ),
     404,
     "Late child notification cannot restore a deleted project",
   )
@@ -2038,7 +2493,12 @@ async function main() {
     "Explicitly recreate deleted project",
   )
   const recreated = await check(
-    await browser(`/api/projects/${deletionProject}`, "GET", undefined, maintainerCookie),
+    await browser(
+      `/api/projects/${deletionProject}`,
+      "GET",
+      undefined,
+      maintainerCookie,
+    ),
     200,
     "Recreated project does not restore its deleted images",
   )
@@ -2055,7 +2515,12 @@ async function main() {
     "Explicitly recreate one deleted image",
   )
   await check(
-    await browser(`/api/repositories/${indexImage}`, "GET", undefined, maintainerCookie),
+    await browser(
+      `/api/repositories/${indexImage}`,
+      "GET",
+      undefined,
+      maintainerCookie,
+    ),
     200,
     "Recreated image becomes readable again",
   )
@@ -2070,7 +2535,8 @@ async function main() {
     deletionKey.secret,
   )
   assert.deepEqual(
-    JSON.parse(Buffer.from(reopened.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(reopened.split(".")[1], "base64url").toString())
+      .access[0].actions,
     ["pull", "push"],
   )
   assertions++
@@ -2138,7 +2604,12 @@ async function main() {
   )
 
   await check(
-    await browser(`/api/users/${created.id}`, "PATCH", { role: "viewer" }, adminCookie),
+    await browser(
+      `/api/users/${created.id}`,
+      "PATCH",
+      { role: "viewer" },
+      adminCookie,
+    ),
     200,
     "Demote key owner",
   )
@@ -2148,18 +2619,33 @@ async function main() {
     imageKey.secret,
   )
   assert.deepEqual(
-    JSON.parse(Buffer.from(demoted.split(".")[1], "base64url").toString()).access[0].actions,
+    JSON.parse(Buffer.from(demoted.split(".")[1], "base64url").toString())
+      .access[0].actions,
     ["pull"],
   )
   assertions++
   await check(
-    await browser(`/api/users/${created.id}`, "PATCH", { enabled: false }, adminCookie),
+    await browser(
+      `/api/users/${created.id}`,
+      "PATCH",
+      { enabled: false },
+      adminCookie,
+    ),
     200,
     "Disable maintainer",
   )
-  await rejectedKey(imageKey.username, imageKey.secret, "Disabled owner blocks existing keys")
+  await rejectedKey(
+    imageKey.username,
+    imageKey.secret,
+    "Disabled owner blocks existing keys",
+  )
   await check(
-    await browser(`/api/keys/${imageKey.id}/rotate`, "POST", undefined, adminCookie),
+    await browser(
+      `/api/keys/${imageKey.id}/rotate`,
+      "POST",
+      undefined,
+      adminCookie,
+    ),
     409,
     "Disabled owner's key cannot rotate even for admin",
   )
@@ -2173,11 +2659,14 @@ async function main() {
     401,
     "Disabled user's existing session revoked",
   )
-  const badToken = await fetch(`${app}/api/registry/token?service=dockyard-registry`, {
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${maintainer}:${testPassword}`).toString("base64")}`,
+  const badToken = await fetch(
+    `${app}/api/registry/token?service=dockyard-registry`,
+    {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${maintainer}:${testPassword}`).toString("base64")}`,
+      },
     },
-  })
+  )
   await check(badToken, 401, "Disabled Docker credentials rejected")
   const activity = await check(
     await browser("/api/activity", "GET", undefined, adminCookie),
@@ -2204,7 +2693,11 @@ async function main() {
       !JSON.stringify(activity).includes(originalSecret),
   )
   assertions += 3
-  await check(await browser("/api/auth/logout", "POST", {}, viewerCookie), 200, "Logout")
+  await check(
+    await browser("/api/auth/logout", "POST", {}, viewerCookie),
+    200,
+    "Logout",
+  )
   const me = await check(
     await browser("/api/auth/me", "GET", undefined, viewerCookie),
     200,
@@ -2212,7 +2705,9 @@ async function main() {
   )
   assert.equal(me.user, null)
   assertions++
-  console.log(`Passed ${assertions} integration assertions against PostgreSQL and Docker Registry.`)
+  console.log(
+    `Passed ${assertions} integration assertions against PostgreSQL and Docker Registry.`,
+  )
 }
 
 main().catch((error: unknown) => {

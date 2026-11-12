@@ -17,7 +17,9 @@ export const config = {
     return process.env.REGISTRY_TOKEN_SERVICE ?? "dockyard-registry"
   },
   get defaultVisibility(): Visibility {
-    return process.env.DEFAULT_REPOSITORY_VISIBILITY === "private" ? "private" : "public"
+    return process.env.DEFAULT_REPOSITORY_VISIBILITY === "private"
+      ? "private"
+      : "public"
   },
   get secureCookies() {
     return new URL(this.appUrl).protocol === "https:"

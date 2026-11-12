@@ -90,12 +90,16 @@ describe("deployment environment generator", () => {
 
   it("refuses to overwrite an existing configuration", async () => {
     const output = join(workspace, ".env")
-    await writeFile(output, "KEEP_EXISTING_CONFIGURATION=yes\n", { mode: 0o600 })
+    await writeFile(output, "KEEP_EXISTING_CONFIGURATION=yes\n", {
+      mode: 0o600,
+    })
     await expect(generate()).rejects.toMatchObject({
       code: 1,
       stderr: expect.stringContaining("already exists"),
     })
-    expect(await readFile(output, "utf8")).toBe("KEEP_EXISTING_CONFIGURATION=yes\n")
+    expect(await readFile(output, "utf8")).toBe(
+      "KEEP_EXISTING_CONFIGURATION=yes\n",
+    )
   })
 
   it("refuses even dangling symlinks without creating their target", async () => {
@@ -109,21 +113,35 @@ describe("deployment environment generator", () => {
 
   it("allows only one concurrent invocation to create the output", async () => {
     const results = await Promise.allSettled([generate(), generate()])
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1)
-    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1)
-    expect(await readFile(join(workspace, ".env"), "utf8")).not.toContain("replace-with")
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+    ).toHaveLength(1)
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1)
+    expect(await readFile(join(workspace, ".env"), "utf8")).not.toContain(
+      "replace-with",
+    )
   })
 
   it("supports help and rejects excess arguments without writing configuration", async () => {
     expect((await generate(["--help"])).stdout).toContain("Usage:")
-    await expect(generate(["first", "second"])).rejects.toMatchObject({ code: 2 })
+    await expect(generate(["first", "second"])).rejects.toMatchObject({
+      code: 2,
+    })
     await expect(access(join(workspace, ".env"))).rejects.toThrow()
   })
 
   it("reports a missing OpenSSL installation without creating a file", async () => {
     await expect(
-      execute("/bin/sh", [script], { cwd: workspace, env: { ...process.env, PATH: "" } }),
-    ).rejects.toMatchObject({ code: 1, stderr: expect.stringContaining("OpenSSL is required") })
+      execute("/bin/sh", [script], {
+        cwd: workspace,
+        env: { ...process.env, PATH: "" },
+      }),
+    ).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("OpenSSL is required"),
+    })
     await expect(access(join(workspace, ".env"))).rejects.toThrow()
   })
 

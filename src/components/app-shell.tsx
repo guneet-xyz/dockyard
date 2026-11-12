@@ -1,7 +1,5 @@
 "use client"
-import Link from "next/link"
-import { useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
+
 import { useQueryClient } from "@tanstack/react-query"
 import {
   Activity,
@@ -23,10 +21,15 @@ import {
   Terminal,
   Users,
 } from "lucide-react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+
 import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
+
 import { Logo } from "./logo"
 import { Badge } from "./ui/badge"
 import { Button } from "./ui/button"
@@ -68,7 +71,7 @@ function Sidebar({ close }: { close?: () => void }) {
           {data?.registryHost ?? "Connecting…"}
         </p>
       </div>
-      <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+      <p className="mb-2 px-3 text-[10px] font-medium tracking-[0.16em] text-muted-foreground/70 uppercase">
         Workspace
       </p>
       <nav aria-label="Main navigation" className="space-y-1">
@@ -94,7 +97,7 @@ function Sidebar({ close }: { close?: () => void }) {
       </nav>
       {isAdmin && (
         <>
-          <p className="mb-2 mt-7 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+          <p className="mt-7 mb-2 px-3 text-[10px] font-medium tracking-[0.16em] text-muted-foreground/70 uppercase">
             Administration
           </p>
           <nav aria-label="Administration" className="space-y-1">
@@ -123,7 +126,9 @@ function Sidebar({ close }: { close?: () => void }) {
       <div className="mt-auto pt-10">
         <div className="rounded-lg border border-primary/15 bg-gradient-to-br from-primary/5 to-transparent p-4">
           <ShieldCheck className="mb-3 size-5 text-primary" />
-          <p className="text-xs font-medium">Your images. Your infrastructure.</p>
+          <p className="text-xs font-medium">
+            Your images. Your infrastructure.
+          </p>
           <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
             A private home for everything you build.
           </p>
@@ -210,14 +215,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Button>
               </DialogTrigger>
               <DialogContent
-                className="inset-y-0 left-0 top-0 h-full w-[280px] max-w-[90vw] translate-x-0 translate-y-0 rounded-none border-y-0 border-l-0 p-0"
+                className="inset-y-0 top-0 left-0 h-full w-[280px] max-w-[90vw] translate-x-0 translate-y-0 rounded-none border-y-0 border-l-0 p-0"
                 aria-describedby={undefined}
               >
                 <DialogTitle className="sr-only">Navigation</DialogTitle>
                 <Sidebar close={() => setMobileOpen(false)} />
               </DialogContent>
             </Dialog>
-            <span className="hidden text-xs text-muted-foreground sm:inline">Workspace</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              Workspace
+            </span>
             <ChevronRight className="hidden size-3 text-muted-foreground/50 sm:block" />
             <span className="text-xs font-medium">{title}</span>
           </div>
@@ -237,14 +244,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <span className="flex size-7 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-xs text-primary">
                       {user.name.slice(0, 1).toUpperCase()}
                     </span>
-                    <span className="hidden text-xs sm:inline">{user.name}</span>
+                    <span className="hidden text-xs sm:inline">
+                      {user.name}
+                    </span>
                     <ChevronDown className="size-3 text-muted-foreground" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <div className="px-2 py-2">
                     <p className="text-xs font-medium">{user.username}</p>
-                    <p className="mt-1 text-[11px] capitalize text-muted-foreground">{user.role}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground capitalize">
+                      {user.role}
+                    </p>
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={logout}>
@@ -268,7 +279,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         </header>
-        <main className="mx-auto max-w-[1600px] px-5 py-8 sm:px-8 lg:px-10">{children}</main>
+        <main className="mx-auto max-w-[1600px] px-5 py-8 sm:px-8 lg:px-10">
+          {children}
+        </main>
         <footer className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-2 border-t py-5 text-[11px] text-muted-foreground/60 sm:mx-8 lg:mx-10">
           <span>Dockyard · Your container images, organized.</span>
           <span className="flex items-center gap-1.5">

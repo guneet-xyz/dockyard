@@ -1,27 +1,32 @@
 "use client"
-import { useState } from "react"
-import Link from "next/link"
-import { useParams } from "next/navigation"
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, Box, Loader2, Search, Settings2 } from "lucide-react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
-import { api } from "@/lib/api-client"
+
 import { DeleteResourceDialog } from "@/components/delete-resource-dialog"
 import { DescriptionEditor } from "@/components/description-editor"
-import { Textarea } from "@/components/ui/textarea"
-import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import { LogoEditor } from "@/components/logo-editor"
-import { ResourceIcon } from "@/components/resource-icon"
-import type { Project, Repository, Visibility } from "@/lib/types"
 import { NewRepositoryDialog } from "@/components/new-repository-dialog"
-import { RepositoryTable, EmptyRepositories } from "@/components/repository-table"
-import { CommandBlock, ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
+import {
+  EmptyRepositories,
+  RepositoryTable,
+} from "@/components/repository-table"
+import { ResourceIcon } from "@/components/resource-icon"
+import {
+  CommandBlock,
+  ErrorState,
+  TableSkeleton,
+  VisibilityBadge,
+} from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -29,8 +34,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { api } from "@/lib/api-client"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+import type { Project, Repository, Visibility } from "@/lib/types"
 
-type Detail = { project: Project; images: Repository[]; registryHost: string; canWrite: boolean }
+type Detail = {
+  project: Project
+  images: Repository[]
+  registryHost: string
+  canWrite: boolean
+}
 
 function ProjectSettings({ project }: { project: Project }) {
   const [description, setDescription] = useState(project.description)
@@ -83,18 +98,24 @@ function ProjectSettings({ project }: { project: Project }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="public">Public — guests can read public images</SelectItem>
-                <SelectItem value="private">Private — sign-in required for every image</SelectItem>
+                <SelectItem value="public">
+                  Public — guests can read public images
+                </SelectItem>
+                <SelectItem value="private">
+                  Private — sign-in required for every image
+                </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Private projects hide all their images from guests, including images previously marked
-              public. Returning a project to public restores each image’s own visibility. Already
-              issued Docker tokens expire within five minutes.
+              Private projects hide all their images from guests, including
+              images previously marked public. Returning a project to public
+              restores each image’s own visibility. Already issued Docker tokens
+              expire within five minutes.
             </p>
           </div>
           <Button type="submit" disabled={update.isPending}>
-            {update.isPending && <Loader2 className="animate-spin" />}Save project
+            {update.isPending && <Loader2 className="animate-spin" />}Save
+            project
           </Button>
         </form>
       </CardContent>
@@ -117,10 +138,14 @@ export default function ProjectPage() {
       </Card>
     )
   if (query.isError)
-    return <ErrorState message={query.error.message} retry={() => query.refetch()} />
+    return (
+      <ErrorState message={query.error.message} retry={() => query.refetch()} />
+    )
   const { project, images, canWrite, registryHost } = query.data
   const filtered = images.filter((image) =>
-    `${image.imageName} ${image.description}`.toLowerCase().includes(search.toLowerCase()),
+    `${image.imageName} ${image.description}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   )
   return (
     <div className="page-enter space-y-6">
@@ -141,18 +166,25 @@ export default function ProjectPage() {
           />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="break-all text-2xl font-semibold tracking-tight">{project.name}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight break-all">
+                {project.name}
+              </h1>
               <VisibilityBadge visibility={project.visibility} />
               <Badge variant="secondary">{images.length} images</Badge>
             </div>
-            <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
-              {project.description || `Container images under ${project.name}/…`}
+            <p className="mt-2 text-sm break-words whitespace-pre-wrap text-muted-foreground">
+              {project.description ||
+                `Container images under ${project.name}/…`}
             </p>
           </div>
         </div>
         {canWrite && (
           <div className="flex flex-wrap items-center gap-2">
-            <LogoEditor kind="project" name={project.name} logoUrl={project.logoUrl} />
+            <LogoEditor
+              kind="project"
+              name={project.name}
+              logoUrl={project.logoUrl}
+            />
             <DescriptionEditor
               kind="project"
               name={project.name}
@@ -182,7 +214,7 @@ export default function ProjectPage() {
         <TabsContent value="images">
           <div className="space-y-5">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+              <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
               <Input
                 aria-label="Search project images"
                 placeholder="Search images in this project…"

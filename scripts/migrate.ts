@@ -1,8 +1,9 @@
+import bcrypt from "bcryptjs"
 import { drizzle } from "drizzle-orm/postgres-js"
 import { migrate } from "drizzle-orm/postgres-js/migrator"
 import postgres from "postgres"
-import bcrypt from "bcryptjs"
 import { z } from "zod"
+
 import { users } from "../src/lib/db/schema"
 import { newPasswordSchema } from "../src/lib/password"
 
@@ -15,7 +16,10 @@ async function main() {
   try {
     await client`SELECT pg_advisory_lock(713920)`
     await migrate(database, { migrationsFolder: "./drizzle" })
-    const existing = await database.select({ id: users.id }).from(users).limit(1)
+    const existing = await database
+      .select({ id: users.id })
+      .from(users)
+      .limit(1)
     if (existing.length === 0) {
       const username = z
         .string()

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+
 import { GET } from "@/app/api/registry/token/route"
 
 const mocks = vi.hoisted(() => ({
@@ -33,7 +34,10 @@ vi.mock("@/lib/auth", () => ({
 }))
 vi.mock("@/lib/access-keys", () => ({ authenticateAccessKey: vi.fn() }))
 vi.mock("@/lib/resource-locks", () => ({ lockImageNamespace: mocks.lock }))
-vi.mock("@/lib/registry", () => ({ repositoryMetadata: mocks.metadata, repositoryExists: vi.fn() }))
+vi.mock("@/lib/registry", () => ({
+  repositoryMetadata: mocks.metadata,
+  repositoryExists: vi.fn(),
+}))
 vi.mock("@/lib/registry-token", () => ({
   signRegistryToken: mocks.sign,
   registryTokenExpiry: () => Math.floor(Date.now() / 1000) + 300,
@@ -51,7 +55,11 @@ beforeEach(() => {
   mocks.metadata.mockImplementation(async (name, tx) => {
     expect(tx).toEqual({ marker: "tx" })
     mocks.events.push(`read:${name}`)
-    return { visibility: "public", configured: true, deleted: name.endsWith("gone") }
+    return {
+      visibility: "public",
+      configured: true,
+      deleted: name.endsWith("gone"),
+    }
   })
   mocks.sign.mockImplementation(async () => {
     expect(mocks.active).toBe(true)
@@ -64,7 +72,11 @@ describe("token issuance coordinated with deletion", () => {
   it("locks every resource before reading and retains locks until signing finishes", async () => {
     const request = new Request(
       "http://localhost/api/registry/token?service=dockyard-registry&scope=repository:team/gone:pull,push&scope=repository:team/api:pull,push",
-      { headers: { Authorization: `Basic ${Buffer.from("maintainer:dummy").toString("base64")}` } },
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from("maintainer:dummy").toString("base64")}`,
+        },
+      },
     )
     const response = await GET(request)
     expect(response.status).toBe(200)

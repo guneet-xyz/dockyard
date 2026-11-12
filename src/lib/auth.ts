@@ -1,12 +1,13 @@
 import { createHash, randomBytes } from "node:crypto"
-import { cookies } from "next/headers"
 import bcrypt from "bcryptjs"
 import { and, eq, gt, lt, sql } from "drizzle-orm"
+import { cookies } from "next/headers"
+
+import { config } from "./config"
 import { db } from "./db"
 import { auditEvents, loginAttempts, sessions, users } from "./db/schema"
-import type { SessionUser } from "./types"
 import { HttpError } from "./http"
-import { config } from "./config"
+import type { SessionUser } from "./types"
 
 const cookieName = "dockyard_session"
 const sessionDuration = 7 * 24 * 60 * 60
@@ -41,7 +42,8 @@ export async function currentUser(): Promise<SessionUser | null> {
 export async function requireUser(admin = false) {
   const user = await currentUser()
   if (!user) throw new HttpError(401, "Please sign in to continue.")
-  if (admin && user.role !== "admin") throw new HttpError(403, "Administrator access is required.")
+  if (admin && user.role !== "admin")
+    throw new HttpError(403, "Administrator access is required.")
   return user
 }
 
@@ -55,7 +57,11 @@ export async function consumeCredentialAttempt(username: string) {
   // Atomic upsert avoids parallel requests bypassing the limit.
   const [attempt] = await db()
     .insert(loginAttempts)
-    .values({ key, count: 1, resetAt: new Date(now.getTime() + 15 * 60 * 1000) })
+    .values({
+      key,
+      count: 1,
+      resetAt: new Date(now.getTime() + 15 * 60 * 1000),
+    })
     .onConflictDoUpdate({
       target: loginAttempts.key,
       set: {
@@ -64,7 +70,8 @@ export async function consumeCredentialAttempt(username: string) {
       },
     })
     .returning()
-  if (attempt.count > 20) throw new HttpError(429, "Too many attempts. Try again in 15 minutes.")
+  if (attempt.count > 20)
+    throw new HttpError(429, "Too many attempts. Try again in 15 minutes.")
 }
 
 export async function resetCredentialAttempts(username: string) {
@@ -77,7 +84,12 @@ export async function checkCredentials(
   username: string,
   password: string,
 ): Promise<SessionUser | null> {
-  if (Buffer.byteLength(password, "utf8") > 72 || !username || username.length > 64) return null
+  if (
+    Buffer.byteLength(password, "utf8") > 72 ||
+    !username ||
+    username.length > 64
+  )
+    return null
   await consumeCredentialAttempt(username)
   const [user] = await db()
     .select()
@@ -107,7 +119,11 @@ export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url")
   await db()
     .insert(sessions)
-    .values({ id: hash(token), userId, expiresAt: new Date(Date.now() + sessionDuration * 1000) })
+    .values({
+      id: hash(token),
+      userId,
+      expiresAt: new Date(Date.now() + sessionDuration * 1000),
+    })
   jar.set(cookieName, token, {
     httpOnly: true,
     secure: config.secureCookies,

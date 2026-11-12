@@ -1,14 +1,24 @@
 "use client"
-import Link from "next/link"
+
 import { ArrowUpRight, ChevronRight, PackageOpen, Tag } from "lucide-react"
-import type { Repository } from "@/lib/types"
+import Link from "next/link"
+
 import { imageHref } from "@/lib/image-names"
-import { Button } from "./ui/button"
-import { Badge } from "./ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
-import { VisibilityBadge } from "./shared"
+import type { Repository } from "@/lib/types"
+
 import { PullCount } from "./pull-count"
 import { ResourceIcon } from "./resource-icon"
+import { VisibilityBadge } from "./shared"
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table"
 
 export function RepositoryTable({
   repositories,
@@ -35,7 +45,10 @@ export function RepositoryTable({
         {repositories.map((repo) => (
           <TableRow key={repo.name}>
             <TableCell>
-              <Link href={imageHref(repo.name)} className="group flex min-w-44 items-center gap-3">
+              <Link
+                href={imageHref(repo.name)}
+                className="group flex min-w-44 items-center gap-3"
+              >
                 <ResourceIcon
                   kind="image"
                   name={repo.name}
@@ -53,7 +66,9 @@ export function RepositoryTable({
                   </p>
                   <p className="mt-1 max-w-64 truncate text-[11px] text-muted-foreground">
                     {repo.description ||
-                      (repo.tagCount ? "Container image repository" : "Ready for your first push")}
+                      (repo.tagCount
+                        ? "Container image repository"
+                        : "Ready for your first push")}
                   </p>
                 </div>
               </Link>
@@ -68,7 +83,10 @@ export function RepositoryTable({
               </span>
             </TableCell>
             <TableCell>
-              <PullCount count={repo.pullCount} label={`Pulls for image ${repo.name}`} />
+              <PullCount
+                count={repo.pullCount}
+                label={`Pulls for image ${repo.name}`}
+              />
             </TableCell>
             <TableCell>
               {repo.tags.length ? (
@@ -84,8 +102,16 @@ export function RepositoryTable({
               )}
             </TableCell>
             <TableCell>
-              <Button asChild variant="ghost" size="icon" className="size-7 text-muted-foreground">
-                <Link href={imageHref(repo.name)} aria-label={`Open ${repo.name}`}>
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground"
+              >
+                <Link
+                  href={imageHref(repo.name)}
+                  aria-label={`Open ${repo.name}`}
+                >
                   <ChevronRight className="size-4" />
                 </Link>
               </Button>
@@ -97,12 +123,16 @@ export function RepositoryTable({
   )
 }
 
-export function EmptyRepositories({ filtered = false }: { filtered?: boolean }) {
+export function EmptyRepositories({
+  filtered = false,
+}: {
+  filtered?: boolean
+}) {
   return (
     <div className="flex flex-col items-center px-5 py-14 text-center">
       <div className="relative mb-6 flex size-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/5">
         <PackageOpen className="size-7 text-primary" />
-        <div className="absolute -right-1 -top-1 size-3 rounded-full border-4 border-card bg-primary" />
+        <div className="absolute -top-1 -right-1 size-3 rounded-full border-4 border-card bg-primary" />
       </div>
       <h3 className="text-base font-medium">
         {filtered ? "No matching images" : "Your next great build starts here"}

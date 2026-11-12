@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
+
 import { currentUser } from "@/lib/auth"
-import { apiError } from "@/lib/http"
 import { config } from "@/lib/config"
+import { apiError } from "@/lib/http"
 
 export const dynamic = "force-dynamic"
 

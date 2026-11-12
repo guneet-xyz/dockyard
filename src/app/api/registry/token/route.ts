@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server"
-import { checkCredentials } from "@/lib/auth"
+
 import { authenticateAccessKey, type AuthenticatedKey } from "@/lib/access-keys"
-import { allowedKeyActions } from "@/lib/key-permissions"
+import { checkCredentials } from "@/lib/auth"
 import { config } from "@/lib/config"
+import { db } from "@/lib/db"
 import { apiError, HttpError } from "@/lib/http"
+import { validImageRepository } from "@/lib/image-names"
+import { allowedKeyActions } from "@/lib/key-permissions"
 import { allowedActions, validRepositoryName } from "@/lib/permissions"
 import { repositoryExists, repositoryMetadata } from "@/lib/registry"
-import { validImageRepository } from "@/lib/image-names"
-import { type RegistryAccess, signRegistryToken, registryTokenExpiry } from "@/lib/registry-token"
-import type { SessionUser } from "@/lib/types"
+import {
+  registryTokenExpiry,
+  signRegistryToken,
+  type RegistryAccess,
+} from "@/lib/registry-token"
 import { lockImageNamespace } from "@/lib/resource-locks"
-import { db } from "@/lib/db"
+import type { SessionUser } from "@/lib/types"
 
 export const dynamic = "force-dynamic"
 
@@ -25,7 +30,9 @@ export async function GET(request: Request) {
     if (authorization) {
       if (!authorization.startsWith("Basic ") || authorization.length > 2048)
         throw new HttpError(401, "Invalid credentials.")
-      const decoded = Buffer.from(authorization.slice(6), "base64").toString("utf8")
+      const decoded = Buffer.from(authorization.slice(6), "base64").toString(
+        "utf8",
+      )
       const separator = decoded.indexOf(":")
       if (separator < 0) throw new HttpError(401, "Invalid credentials.")
       const username = decoded.slice(0, separator)
@@ -42,7 +49,8 @@ export async function GET(request: Request) {
       .getAll("scope")
       .flatMap((scope) => scope.split(" "))
       .filter(Boolean)
-    if (scopes.length > 50) throw new HttpError(400, "Too many requested scopes.")
+    if (scopes.length > 50)
+      throw new HttpError(400, "Too many requested scopes.")
     const credentials = await db().transaction(async (tx) => {
       // Retain shared locks through signing, including multi-resource requests.
       // Deletion cannot commit between permission calculation and JWT issuance.
@@ -50,7 +58,10 @@ export async function GET(request: Request) {
         ...new Set(
           scopes
             .map((scope) => scope.split(":"))
-            .filter(([type, name]) => type === "repository" && validRepositoryName(name ?? ""))
+            .filter(
+              ([type, name]) =>
+                type === "repository" && validRepositoryName(name ?? ""),
+            )
             .map(([, name]) => name),
         ),
       ].sort()
@@ -58,7 +69,8 @@ export async function GET(request: Request) {
       const access: RegistryAccess[] = []
       for (const scope of scopes) {
         const [type, name, rawActions, extra] = scope.split(":")
-        if (!name || !rawActions || extra) throw new HttpError(400, "Invalid scope.")
+        if (!name || !rawActions || extra)
+          throw new HttpError(400, "Invalid scope.")
         if (type === "repository" && validRepositoryName(name)) {
           const metadata = await repositoryMetadata(name, tx)
           let actions = key
@@ -69,7 +81,11 @@ export async function GET(request: Request) {
                 name,
                 rawActions.split(","),
               )
-            : allowedActions(user?.role ?? null, metadata.visibility, rawActions.split(","))
+            : allowedActions(
+                user?.role ?? null,
+                metadata.visibility,
+                rawActions.split(","),
+              )
           if (metadata.deleted) actions = []
           if (
             actions.includes("push") &&
@@ -77,7 +93,9 @@ export async function GET(request: Request) {
             !metadata.configured &&
             !(await repositoryExists(name))
           ) {
-            actions = actions.filter((action) => action !== "push" && action !== "delete")
+            actions = actions.filter(
+              (action) => action !== "push" && action !== "delete",
+            )
           }
           access.push({
             type,
@@ -89,7 +107,11 @@ export async function GET(request: Request) {
             type,
             name,
             actions:
-              !key && user?.role === "admin" && rawActions.split(",").includes("*") ? ["*"] : [],
+              !key &&
+              user?.role === "admin" &&
+              rawActions.split(",").includes("*")
+                ? ["*"]
+                : [],
           })
         }
       }
@@ -103,15 +125,19 @@ export async function GET(request: Request) {
         access_token: token,
         expires_in: Math.max(
           0,
-          registryTokenExpiry(key?.expiresAt ?? null) - Math.floor(Date.now() / 1000),
+          registryTokenExpiry(key?.expiresAt ?? null) -
+            Math.floor(Date.now() / 1000),
         ),
         issued_at: new Date().toISOString(),
       }
     })
-    return NextResponse.json(credentials, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json(credentials, {
+      headers: { "Cache-Control": "no-store" },
+    })
   } catch (error) {
     const response = apiError(error)
-    if (response.status === 401) response.headers.set("WWW-Authenticate", 'Basic realm="Dockyard"')
+    if (response.status === 401)
+      response.headers.set("WWW-Authenticate", 'Basic realm="Dockyard"')
     return response
   }
 }

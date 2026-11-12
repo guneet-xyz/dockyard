@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto"
 import { z } from "zod"
+
 import { validRepositoryName } from "./permissions"
 
 export const INTERNAL_REGISTRY_USER_AGENT = "Dockyard/internal"
@@ -88,7 +89,13 @@ export function pullClientKey(
     .digest("hex")
 }
 
-export function pullAfterReset(timestamp: string, ...resets: (Date | null | undefined)[]) {
+export function pullAfterReset(
+  timestamp: string,
+  ...resets: (Date | null | undefined)[]
+) {
   const time = new Date(timestamp).getTime()
-  return Number.isFinite(time) && resets.every((reset) => !reset || time >= reset.getTime())
+  return (
+    Number.isFinite(time) &&
+    resets.every((reset) => !reset || time >= reset.getTime())
+  )
 }

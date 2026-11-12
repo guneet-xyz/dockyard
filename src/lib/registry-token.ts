@@ -1,21 +1,25 @@
 import { createPrivateKey, randomUUID, X509Certificate } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { SignJWT } from "jose"
+
 import { config } from "./config"
 
 export type RegistryAccess = { type: string; name: string; actions: string[] }
 let keyMaterial:
-  Promise<{ key: ReturnType<typeof createPrivateKey>; certificate: string }> | undefined
+  | Promise<{ key: ReturnType<typeof createPrivateKey>; certificate: string }>
+  | undefined
 
 function signingMaterial() {
   return (keyMaterial ??= (async () => {
     const [keyPem, certPem] = await Promise.all([
       readFile(
-        /* turbopackIgnore: true */ process.env.REGISTRY_TOKEN_KEY_PATH ?? "/certs/token.key",
+        /* turbopackIgnore: true */ process.env.REGISTRY_TOKEN_KEY_PATH ??
+          "/certs/token.key",
         "utf8",
       ),
       readFile(
-        /* turbopackIgnore: true */ process.env.REGISTRY_TOKEN_CERT_PATH ?? "/certs/token.crt",
+        /* turbopackIgnore: true */ process.env.REGISTRY_TOKEN_CERT_PATH ??
+          "/certs/token.crt",
         "utf8",
       ),
     ])
@@ -30,7 +34,9 @@ export function registryTokenExpiry(
   expiresAt: Date | null = null,
   now = Math.floor(Date.now() / 1000),
 ) {
-  return expiresAt ? Math.min(now + 300, Math.floor(expiresAt.getTime() / 1000)) : now + 300
+  return expiresAt
+    ? Math.min(now + 300, Math.floor(expiresAt.getTime() / 1000))
+    : now + 300
 }
 
 export async function signRegistryToken(

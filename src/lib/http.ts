@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { ZodError } from "zod"
+
 import { config } from "./config"
 
 export class HttpError extends Error {
@@ -36,6 +37,7 @@ export function apiError(error: unknown) {
 
 export async function jsonBody(request: Request) {
   const text = await request.text()
-  if (text.length > 16384) throw new HttpError(413, "Request body is too large.")
+  if (text.length > 16384)
+    throw new HttpError(413, "Request body is too large.")
   return JSON.parse(text)
 }

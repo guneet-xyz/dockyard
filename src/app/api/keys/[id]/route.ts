@@ -1,19 +1,27 @@
-import { NextResponse } from "next/server"
 import { and, eq, isNull } from "drizzle-orm"
+import { NextResponse } from "next/server"
 import { z } from "zod"
+
 import { requireUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { accessKeys, auditEvents } from "@/lib/db/schema"
 import { apiError, assertSameOrigin, HttpError } from "@/lib/http"
 
-export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   try {
     assertSameOrigin(request)
     const user = await requireUser()
     const id = z.uuid().parse((await context.params).id)
     await db().transaction(async (tx) => {
       const [key] = await tx
-        .select({ id: accessKeys.id, name: accessKeys.name, revokedAt: accessKeys.revokedAt })
+        .select({
+          id: accessKeys.id,
+          name: accessKeys.name,
+          revokedAt: accessKeys.revokedAt,
+        })
         .from(accessKeys)
         .where(
           and(

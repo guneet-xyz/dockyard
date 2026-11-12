@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 import { z } from "zod"
+
+import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 
 describe("HTTP security", () => {
   it("accepts only the configured origin for browser writes", () => {
@@ -20,13 +21,20 @@ describe("HTTP security", () => {
       ),
     ).toThrow(HttpError)
     expect(() =>
-      assertSameOrigin(new Request("https://registry.example.com/api/auth/login")),
+      assertSameOrigin(
+        new Request("https://registry.example.com/api/auth/login"),
+      ),
     ).toThrow(HttpError)
     delete process.env.APP_URL
   })
   it("rejects oversized JSON payloads", async () => {
     await expect(
-      jsonBody(new Request("http://localhost", { method: "POST", body: "x".repeat(16385) })),
+      jsonBody(
+        new Request("http://localhost", {
+          method: "POST",
+          body: "x".repeat(16385),
+        }),
+      ),
     ).rejects.toThrow("too large")
   })
   it("maps authorization and validation errors without leaking internals", async () => {

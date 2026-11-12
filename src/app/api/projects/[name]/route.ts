@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+
 import { audit, currentUser, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { projects } from "@/lib/db/schema"
 import { apiError, assertSameOrigin, HttpError, jsonBody } from "@/lib/http"
 import { canWrite } from "@/lib/permissions"
 import { readableProject } from "@/lib/projects"
-import { withProjectResource } from "@/lib/resource-locks"
 import { deleteProject } from "@/lib/resource-deletion"
+import { withProjectResource } from "@/lib/resource-locks"
 import { resourceSettingsSchema } from "@/lib/resource-settings"
 
 type Context = { params: Promise<{ name: string }> }
@@ -34,7 +35,11 @@ export async function PATCH(request: Request, context: Context) {
   try {
     assertSameOrigin(request)
     const user = await requireUser()
-    if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
+    if (!canWrite(user))
+      throw new HttpError(
+        403,
+        "Maintainer or administrator access is required.",
+      )
     const name = (await context.params).name
     const input = resourceSettingsSchema.parse(await jsonBody(request))
     await withProjectResource(name, async (tx) => {
@@ -42,9 +47,14 @@ export async function PATCH(request: Request, context: Context) {
       await tx
         .insert(projects)
         .values({ name, visibility: current.project.visibility, ...input })
-        .onConflictDoUpdate({ target: projects.name, set: { ...input, updatedAt: new Date() } })
+        .onConflictDoUpdate({
+          target: projects.name,
+          set: { ...input, updatedAt: new Date() },
+        })
     })
-    await audit(user.username, "project.update", name, { visibility: input.visibility })
+    await audit(user.username, "project.update", name, {
+      visibility: input.visibility,
+    })
     return NextResponse.json({ ok: true })
   } catch (error) {
     return apiError(error)
@@ -55,14 +65,21 @@ export async function DELETE(request: Request, context: Context) {
   try {
     assertSameOrigin(request)
     const user = await requireUser()
-    if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
+    if (!canWrite(user))
+      throw new HttpError(
+        403,
+        "Maintainer or administrator access is required.",
+      )
     const name = (await context.params).name
     const { confirmName } = z
       .object({ confirmName: z.string() })
       .strict()
       .parse(await jsonBody(request))
     if (confirmName !== name)
-      throw new HttpError(400, "Type the exact project name to confirm deletion.")
+      throw new HttpError(
+        400,
+        "Type the exact project name to confirm deletion.",
+      )
     return NextResponse.json(await deleteProject(name, user), {
       headers: { "Cache-Control": "no-store" },
     })

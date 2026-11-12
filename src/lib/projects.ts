@@ -1,17 +1,25 @@
 import { eq } from "drizzle-orm"
+
+import { config } from "./config"
 import { db, type DatabaseExecutor } from "./db"
 import { projects } from "./db/schema"
-import { config } from "./config"
 import { HttpError } from "./http"
-import { canRead } from "./permissions"
 import { validProjectName } from "./image-names"
+import { logoReferences } from "./logo-references"
+import { canRead } from "./permissions"
 import { listRepositories } from "./registry"
 import type { Project, Repository, SessionUser } from "./types"
-import { logoReferences } from "./logo-references"
 
-export async function projectMetadata(name: string, connection: DatabaseExecutor = db()) {
+export async function projectMetadata(
+  name: string,
+  connection: DatabaseExecutor = db(),
+) {
   if (!validProjectName(name)) throw new HttpError(400, "Invalid project name.")
-  const [project] = await connection.select().from(projects).where(eq(projects.name, name)).limit(1)
+  const [project] = await connection
+    .select()
+    .from(projects)
+    .where(eq(projects.name, name))
+    .limit(1)
   return project
 }
 
@@ -29,7 +37,9 @@ export function summarizeProjects(
 ) {
   const byName = new Map<string, Project>()
   const hidden = new Set(
-    rows.filter((row) => row.deletedAt || !canRead(user, row.visibility)).map((row) => row.name),
+    rows
+      .filter((row) => row.deletedAt || !canRead(user, row.visibility))
+      .map((row) => row.name),
   )
   for (const row of rows) {
     if (!row.deletedAt && canRead(user, row.visibility))
@@ -64,7 +74,10 @@ export function summarizeProjects(
     project.imageCount++
     project.tagCount += image.tagCount
     project.pullCount += image.pullCount
-    if (image.updatedAt && (!project.updatedAt || image.updatedAt > project.updatedAt))
+    if (
+      image.updatedAt &&
+      (!project.updatedAt || image.updatedAt > project.updatedAt)
+    )
       project.updatedAt = image.updatedAt
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))

@@ -1,9 +1,11 @@
 "use client"
-import { useState } from "react"
-import Image from "next/image"
+
 import { Box, FolderOpen } from "lucide-react"
-import { cn } from "@/lib/utils"
+import Image from "next/image"
+import { useState } from "react"
+
 import type { LogoKind } from "@/lib/logo-constants"
+import { cn } from "@/lib/utils"
 
 export function ResourceIcon({
   kind,

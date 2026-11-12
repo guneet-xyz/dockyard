@@ -1,4 +1,5 @@
 "use client"
+
 import { ErrorState } from "@/components/shared"
 
 export default function ErrorPage({
@@ -7,5 +8,10 @@ export default function ErrorPage({
   error: Error & { digest?: string }
   reset: () => void
 }) {
-  return <ErrorState message="An unexpected error occurred. Please try again." retry={reset} />
+  return (
+    <ErrorState
+      message="An unexpected error occurred. Please try again."
+      retry={reset}
+    />
+  )
 }

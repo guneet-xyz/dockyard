@@ -1,17 +1,18 @@
 import {
-  boolean,
   bigint,
+  boolean,
+  customType,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
   primaryKey,
-  customType,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core"
+
 import type { KeyGrant } from "../types"
 
 export const roleEnum = pgEnum("role", ["admin", "maintainer", "viewer"])
@@ -24,7 +25,9 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: roleEnum("role").notNull().default("viewer"),
   enabled: boolean("enabled").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 })
 
 export const sessions = pgTable(
@@ -46,8 +49,12 @@ export const projects = pgTable("projects", {
   name: text("name").primaryKey(),
   description: text("description").notNull().default(""),
   visibility: visibilityEnum("visibility").notNull().default("public"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   pullCountsResetAt: timestamp("pull_counts_reset_at", { withTimezone: true }),
 })
@@ -62,7 +69,9 @@ export const accessKeys = pgTable(
     name: text("name").notNull(),
     secretHash: text("secret_hash").notNull(),
     grants: jsonb("grants").$type<KeyGrant[]>().notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
@@ -76,12 +85,16 @@ export const repositories = pgTable("repositories", {
   name: text("name").primaryKey(),
   visibility: visibilityEnum("visibility").notNull().default("public"),
   description: text("description").notNull().default(""),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   pullCountsResetAt: timestamp("pull_counts_reset_at", { withTimezone: true }),
 })
 
-const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" })
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+})
 // Raster pictures are bounded and normalized before storage. Keeping them in
 // PostgreSQL makes them durable across container recreation and web replicas.
 export const resourceLogos = pgTable(
@@ -91,7 +104,9 @@ export const resourceLogos = pgTable(
     name: text("name").notNull(),
     data: bytea("data").notNull(),
     digest: text("digest").notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.kind, table.name] })],
 )
@@ -111,7 +126,9 @@ export const imageTagPulls = pgTable(
 // A retry must not increment a counter twice. Do not retain client identities/IPs.
 export const registryPullEvents = pgTable("registry_pull_events", {
   id: uuid("id").primaryKey(),
-  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  receivedAt: timestamp("received_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 })
 
 // Short-lived per-client windows that collapse repeated tag lookups into one pull.
@@ -132,8 +149,13 @@ export const auditEvents = pgTable(
     actor: text("actor").notNull(),
     action: text("action").notNull(),
     target: text("target").notNull(),
-    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    details: jsonb("details")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [index("audit_created_idx").on(table.createdAt)],
 )

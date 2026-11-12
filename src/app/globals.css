@@ -38,7 +38,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]) {

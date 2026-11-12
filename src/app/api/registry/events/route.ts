@@ -1,15 +1,16 @@
 import { timingSafeEqual } from "node:crypto"
+import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { auditEvents, projects, repositories } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
-import { repositoryIdentity } from "@/lib/image-names"
+
 import { config } from "@/lib/config"
+import { auditEvents, projects, repositories } from "@/lib/db/schema"
 import { apiError, HttpError } from "@/lib/http"
+import { repositoryIdentity } from "@/lib/image-names"
 import { validRepositoryName } from "@/lib/permissions"
-import { withImageResource } from "@/lib/resource-locks"
-import { registryEventSchema } from "@/lib/registry-events"
 import { pruneRecentPulls, recordPull } from "@/lib/pull-counts"
+import { registryEventSchema } from "@/lib/registry-events"
+import { withImageResource } from "@/lib/resource-locks"
 
 const eventSchema = z.object({
   events: z.array(registryEventSchema).max(500),
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
       throw new HttpError(401, "Unauthorized.")
     const text = await request.text()
-    if (text.length > 1024 * 1024) throw new HttpError(413, "Notification is too large.")
+    if (text.length > 1024 * 1024)
+      throw new HttpError(413, "Notification is too large.")
     const { events } = eventSchema.parse(JSON.parse(text))
     let pulls = false
     for (const event of events) {
@@ -61,7 +63,10 @@ export async function POST(request: Request) {
         let visibility = config.defaultVisibility
         let deletedAt: Date | null = null
         if (projectName) {
-          await tx.insert(projects).values({ name: projectName, visibility }).onConflictDoNothing()
+          await tx
+            .insert(projects)
+            .values({ name: projectName, visibility })
+            .onConflictDoNothing()
           const [project] = await tx
             .select()
             .from(projects)
@@ -80,7 +85,10 @@ export async function POST(request: Request) {
           })
           .onConflictDoUpdate({
             target: repositories.name,
-            set: { updatedAt: new Date(event.timestamp), ...(deletedAt ? { deletedAt } : {}) },
+            set: {
+              updatedAt: new Date(event.timestamp),
+              ...(deletedAt ? { deletedAt } : {}),
+            },
           })
       })
     }

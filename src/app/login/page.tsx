@@ -1,7 +1,5 @@
 "use client"
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowLeft,
@@ -14,11 +12,15 @@ import {
   Loader2,
   ShieldCheck,
 } from "lucide-react"
-import { api } from "@/lib/api-client"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+
 import { Logo } from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { api } from "@/lib/api-client"
 
 export default function LoginPage() {
   const [username, setUsername] = useState("")
@@ -28,7 +30,10 @@ export default function LoginPage() {
   const client = useQueryClient()
   const login = useMutation({
     mutationFn: () =>
-      api("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+      api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      }),
     onSuccess: () => {
       client.clear()
       router.push("/")
@@ -39,7 +44,7 @@ export default function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden flex-col justify-between overflow-hidden border-r bg-[#0b1412] p-12 lg:flex">
         <div className="grid-pattern absolute inset-0 opacity-50" />
-        <div className="pointer-events-none absolute left-[-20%] top-1/3 size-[600px] rounded-full bg-primary/5 blur-[100px]" />
+        <div className="pointer-events-none absolute top-1/3 left-[-20%] size-[600px] rounded-full bg-primary/5 blur-[100px]" />
         <Link href="/" className="relative">
           <Logo />
         </Link>
@@ -47,18 +52,18 @@ export default function LoginPage() {
           <div className="relative mx-auto mb-12 flex size-40 items-center justify-center rounded-[30px] border border-primary/20 bg-primary/5 shadow-[0_0_90px_#6ce9ba08]">
             <div className="absolute -inset-5 rounded-[40px] border border-primary/5" />
             <Container className="size-20 text-primary" strokeWidth={1} />
-            <span className="absolute -bottom-3 -right-3 flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-[#12271e]">
+            <span className="absolute -right-3 -bottom-3 flex size-12 items-center justify-center rounded-xl border border-primary/20 bg-[#12271e]">
               <ShieldCheck className="size-6 text-primary" />
             </span>
           </div>
-          <h2 className="text-4xl font-semibold leading-tight tracking-tight">
+          <h2 className="text-4xl leading-tight font-semibold tracking-tight">
             Built by you.
             <br />
             <span className="text-primary">Hosted by you.</span>
           </h2>
           <p className="mt-5 text-sm leading-relaxed text-muted-foreground">
-            A secure home for your container images, without giving up control of your
-            infrastructure.
+            A secure home for your container images, without giving up control
+            of your infrastructure.
           </p>
           <div className="mt-8 flex gap-6 text-xs text-muted-foreground">
             <span className="flex items-center gap-2">
@@ -85,11 +90,15 @@ export default function LoginPage() {
         </Link>
         <div className="mx-auto my-auto w-full max-w-sm py-12">
           <Logo className="mb-10 lg:hidden" />
-          <p className="mb-3 text-[10px] font-medium uppercase tracking-[0.16em] text-primary">
+          <p className="mb-3 text-[10px] font-medium tracking-[0.16em] text-primary uppercase">
             Welcome back
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight">Sign in to Dockyard</h1>
-          <p className="mt-3 text-sm text-muted-foreground">Your workspace is one login away.</p>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Sign in to Dockyard
+          </h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Your workspace is one login away.
+          </p>
           <form
             className="mt-8 space-y-5"
             onSubmit={(event) => {
@@ -128,10 +137,14 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShow(!show)}
-                  className="absolute right-3 top-3.5 text-muted-foreground"
+                  className="absolute top-3.5 right-3 text-muted-foreground"
                   aria-label={show ? "Hide password" : "Show password"}
                 >
-                  {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  {show ? (
+                    <EyeOff className="size-4" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -143,13 +156,24 @@ export default function LoginPage() {
                 {login.error.message}
               </p>
             )}
-            <Button className="h-11 w-full" disabled={login.isPending} type="submit">
-              {login.isPending ? <Loader2 className="animate-spin" /> : <ArrowRight />}Sign in
+            <Button
+              className="h-11 w-full"
+              disabled={login.isPending}
+              type="submit"
+            >
+              {login.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <ArrowRight />
+              )}
+              Sign in
             </Button>
           </form>
           <div className="my-7 flex items-center gap-3">
             <div className="h-px flex-1 bg-border" />
-            <span className="text-[10px] text-muted-foreground">JUST LOOKING AROUND?</span>
+            <span className="text-[10px] text-muted-foreground">
+              JUST LOOKING AROUND?
+            </span>
             <div className="h-px flex-1 bg-border" />
           </div>
           <Button asChild variant="outline" className="h-11 w-full">

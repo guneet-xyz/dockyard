@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+
 import { endSession } from "@/lib/auth"
 import { apiError, assertSameOrigin } from "@/lib/http"
 
