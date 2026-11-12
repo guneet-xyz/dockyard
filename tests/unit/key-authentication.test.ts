@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
 import { PgDialect } from "drizzle-orm/pg-core"
-import { authenticateAccessKey, generateKeyCredentials } from "@/lib/access-keys"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+
+import {
+  authenticateAccessKey,
+  generateKeyCredentials,
+} from "@/lib/access-keys"
 
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
@@ -11,7 +15,9 @@ const mocks = vi.hoisted(() => ({
   consume: vi.fn(),
   reset: vi.fn(),
 }))
-vi.mock("@/lib/db", () => ({ db: () => ({ select: mocks.select, update: mocks.update }) }))
+vi.mock("@/lib/db", () => ({
+  db: () => ({ select: mocks.select, update: mocks.update }),
+}))
 vi.mock("@/lib/auth", () => ({
   consumeCredentialAttempt: mocks.consume,
   resetCredentialAttempts: mocks.reset,
@@ -23,9 +29,21 @@ const row = {
     ...credentials,
     revokedAt: null,
     expiresAt: null,
-    grants: [{ type: "image" as const, target: "team/api", actions: ["pull" as const] }],
+    grants: [
+      {
+        type: "image" as const,
+        target: "team/api",
+        actions: ["pull" as const],
+      },
+    ],
   },
-  user: { id: "owner", username: "owner", name: "Owner", role: "viewer" as const, enabled: true },
+  user: {
+    id: "owner",
+    username: "owner",
+    name: "Owner",
+    role: "viewer" as const,
+    enabled: true,
+  },
 }
 
 beforeEach(() => {
@@ -50,7 +68,10 @@ beforeEach(() => {
 
 describe("key authentication during rotation", () => {
   it("rechecks the validated hash before accepting the secret", async () => {
-    const authenticated = await authenticateAccessKey(credentials.username, credentials.secret)
+    const authenticated = await authenticateAccessKey(
+      credentials.username,
+      credentials.secret,
+    )
     expect(authenticated?.id).toBe(credentials.id)
     const query = new PgDialect().sqlToQuery(mocks.updateWhere.mock.calls[0][0])
     expect(query.sql).toContain('"secret_hash" =')
@@ -60,12 +81,17 @@ describe("key authentication during rotation", () => {
 
   it("rejects a secret if rotation or revocation wins the concurrent update", async () => {
     mocks.returning.mockResolvedValue([])
-    const authenticated = await authenticateAccessKey(credentials.username, credentials.secret)
+    const authenticated = await authenticateAccessKey(
+      credentials.username,
+      credentials.secret,
+    )
     expect(authenticated).toBeNull()
   })
 
   it("does not update usage for a mismatched secret", async () => {
-    expect(await authenticateAccessKey(credentials.username, "dk_wrong")).toBeNull()
+    expect(
+      await authenticateAccessKey(credentials.username, "dk_wrong"),
+    ).toBeNull()
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.reset).not.toHaveBeenCalled()
   })

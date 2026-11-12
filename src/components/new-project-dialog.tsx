@@ -1,16 +1,16 @@
 "use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { FolderPlus, Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+
 import { api } from "@/lib/api-client"
-import type { Visibility } from "@/lib/types"
-import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
-import { Textarea } from "./ui/textarea"
 import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
+import type { Visibility } from "@/lib/types"
+
+import { Button } from "./ui/button"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select"
+import { Textarea } from "./ui/textarea"
 
 export function NewProjectDialog({
   defaultVisibility = "public",
@@ -59,7 +68,8 @@ export function NewProjectDialog({
         <DialogHeader>
           <DialogTitle>Create a project</DialogTitle>
           <DialogDescription>
-            A namespace for related images, such as dockyard/init and dockyard/web.
+            A namespace for related images, such as dockyard/init and
+            dockyard/web.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -106,17 +116,27 @@ export function NewProjectDialog({
                 <SelectItem value="public">
                   Public — public images can be browsed by guests
                 </SelectItem>
-                <SelectItem value="private">Private — all images require sign-in</SelectItem>
+                <SelectItem value="private">
+                  Private — all images require sign-in
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={create.isPending || !name}>
-              {create.isPending ? <Loader2 className="animate-spin" /> : <FolderPlus />}Create
-              project
+              {create.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <FolderPlus />
+              )}
+              Create project
             </Button>
           </DialogFooter>
         </form>

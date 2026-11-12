@@ -1,13 +1,13 @@
 "use client"
-import { useState } from "react"
+
 import { useQuery } from "@tanstack/react-query"
 import { Activity, RefreshCw, Search, ShieldCheck } from "lucide-react"
-import { api } from "@/lib/api-client"
-import type { AuditEvent } from "@/lib/types"
-import { timeAgo } from "@/lib/utils"
+import { useState } from "react"
+
 import { AdminGate } from "@/components/admin-gate"
-import { Button } from "@/components/ui/button"
+import { ErrorState, TableSkeleton } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -18,7 +18,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ErrorState, TableSkeleton } from "@/components/shared"
+import { api } from "@/lib/api-client"
+import type { AuditEvent } from "@/lib/types"
+import { timeAgo } from "@/lib/utils"
 
 const labels: Record<string, string> = {
   "user.login": "Signed in",
@@ -51,13 +53,17 @@ function ActivityView() {
     refetchInterval: 30000,
   })
   const events = (query.data?.events ?? []).filter((event) =>
-    `${event.actor} ${event.action} ${event.target}`.toLowerCase().includes(search.toLowerCase()),
+    `${event.actor} ${event.action} ${event.target}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   )
   return (
     <div className="page-enter space-y-7">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Activity log</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Activity log
+          </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             A clear trail of who changed what in your registry.
           </p>
@@ -74,7 +80,7 @@ function ActivityView() {
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="relative w-full max-w-sm">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
             placeholder="Filter by actor, action, or repository…"
@@ -86,7 +92,10 @@ function ActivityView() {
         <p className="text-xs text-muted-foreground">Most recent 100 events</p>
       </div>
       {query.isError ? (
-        <ErrorState message={query.error.message} retry={() => query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          retry={() => query.refetch()}
+        />
       ) : (
         <Card className="overflow-hidden">
           {query.isPending ? (
@@ -114,7 +123,11 @@ function ActivityView() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={event.action.includes("delete") ? "destructive" : "secondary"}
+                        variant={
+                          event.action.includes("delete")
+                            ? "destructive"
+                            : "secondary"
+                        }
                       >
                         {labels[event.action] ?? event.action}
                       </Badge>
@@ -123,7 +136,7 @@ function ActivityView() {
                       {event.target}
                     </TableCell>
                     <TableCell
-                      className="whitespace-nowrap text-xs text-muted-foreground"
+                      className="text-xs whitespace-nowrap text-muted-foreground"
                       title={new Date(event.createdAt).toLocaleString()}
                     >
                       {timeAgo(event.createdAt)}
@@ -151,8 +164,8 @@ function ActivityView() {
       )}
       <p className="flex items-center gap-2 text-xs text-muted-foreground">
         <ShieldCheck className="size-3.5 text-primary" />
-        Records UI administration and registry manifest pushes. Pulls and blob transfers are not
-        logged here.
+        Records UI administration and registry manifest pushes. Pulls and blob
+        transfers are not logged here.
       </p>
     </div>
   )

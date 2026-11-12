@@ -1,11 +1,28 @@
 "use client"
-import { useState } from "react"
+
+import {
+  ArrowUpRight,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  Search,
+  Tag,
+  X,
+} from "lucide-react"
 import Link from "next/link"
-import { ArrowUpRight, LayoutGrid, List, RefreshCw, Search, Tag, X } from "lucide-react"
-import { useRepositories } from "@/hooks/use-repositories"
+import { useState } from "react"
+
+import { NewRepositoryDialog } from "@/components/new-repository-dialog"
+import { PullCount } from "@/components/pull-count"
+import {
+  EmptyRepositories,
+  RepositoryTable,
+} from "@/components/repository-table"
+import { ResourceIcon } from "@/components/resource-icon"
+import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -13,13 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { EmptyRepositories, RepositoryTable } from "@/components/repository-table"
-import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
-import { NewRepositoryDialog } from "@/components/new-repository-dialog"
-import { cn } from "@/lib/utils"
+import { useRepositories } from "@/hooks/use-repositories"
 import { imageHref } from "@/lib/image-names"
-import { PullCount } from "@/components/pull-count"
-import { ResourceIcon } from "@/components/resource-icon"
+import { cn } from "@/lib/utils"
 
 export default function RepositoriesPage() {
   const query = useRepositories()
@@ -52,22 +65,24 @@ export default function RepositoriesPage() {
           </p>
         </div>
         {query.data?.canWrite && (
-          <NewRepositoryDialog defaultVisibility={query.data.defaultVisibility} />
+          <NewRepositoryDialog
+            defaultVisibility={query.data.defaultVisibility}
+          />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-48 flex-1">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
           <Input
             aria-label="Search images"
-            className="pl-9 pr-9"
+            className="pr-9 pl-9"
             placeholder="Search images…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           {search && (
             <button
-              className="absolute right-3 top-2.5 text-muted-foreground"
+              className="absolute top-2.5 right-3 text-muted-foreground"
               aria-label="Clear search"
               onClick={() => setSearch("")}
             >
@@ -139,17 +154,24 @@ export default function RepositoriesPage() {
             ? "Loading images…"
             : `${filtered.length} ${filtered.length === 1 ? "image" : "images"}${search || visibility !== "all" ? ` of ${all.length}` : ""}`}
         </span>
-        <span className="hidden sm:inline">Synced with your registry · refreshes every minute</span>
+        <span className="hidden sm:inline">
+          Synced with your registry · refreshes every minute
+        </span>
       </div>
       {query.isError ? (
-        <ErrorState message={query.error.message} retry={() => query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          retry={() => query.refetch()}
+        />
       ) : query.isPending ? (
         <Card>
           <TableSkeleton />
         </Card>
       ) : !filtered.length ? (
         <Card>
-          <EmptyRepositories filtered={Boolean(search || visibility !== "all")} />
+          <EmptyRepositories
+            filtered={Boolean(search || visibility !== "all")}
+          />
         </Card>
       ) : view === "list" ? (
         <Card className="overflow-hidden">
@@ -161,10 +183,16 @@ export default function RepositoriesPage() {
             <Link key={repo.name} href={imageHref(repo.name)} className="group">
               <Card className="h-full p-5 transition-colors hover:border-primary/40">
                 <div className="mb-5 flex items-center justify-between">
-                  <ResourceIcon kind="image" name={repo.name} logoUrl={repo.logoUrl} />
+                  <ResourceIcon
+                    kind="image"
+                    name={repo.name}
+                    logoUrl={repo.logoUrl}
+                  />
                   <VisibilityBadge visibility={repo.visibility} />
                 </div>
-                <h2 className="truncate font-medium group-hover:text-primary">{repo.name}</h2>
+                <h2 className="truncate font-medium group-hover:text-primary">
+                  {repo.name}
+                </h2>
                 <p className="mt-2 line-clamp-2 min-h-9 text-xs leading-relaxed text-muted-foreground">
                   {repo.description || "Container image repository"}
                 </p>
@@ -173,7 +201,10 @@ export default function RepositoriesPage() {
                     <Tag className="size-3" />
                     {repo.tagCount} tags
                   </span>
-                  <PullCount count={repo.pullCount} label={`Pulls for image ${repo.name}`} />
+                  <PullCount
+                    count={repo.pullCount}
+                    label={`Pulls for image ${repo.name}`}
+                  />
                   <ArrowUpRight className="size-4 group-hover:text-primary" />
                 </div>
               </Card>

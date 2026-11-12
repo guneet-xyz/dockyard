@@ -9,7 +9,11 @@ export type SessionUser = {
 export type UserInfo = SessionUser & { createdAt: string }
 export type Visibility = "public" | "private"
 export type KeyAction = "pull" | "push" | "delete"
-export type KeyGrant = { type: "project" | "image"; target: string; actions: KeyAction[] }
+export type KeyGrant = {
+  type: "project" | "image"
+  target: string
+  actions: KeyAction[]
+}
 export type AccessKeyInfo = {
   id: string
   username: string

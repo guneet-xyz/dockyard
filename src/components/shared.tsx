@@ -1,13 +1,22 @@
 "use client"
-import { useState } from "react"
+
 import { AlertCircle, Check, Copy, Globe2, Lock, RefreshCw } from "lucide-react"
+import { useState } from "react"
 import { toast } from "sonner"
-import { Button } from "./ui/button"
-import { Badge } from "./ui/badge"
-import { Skeleton } from "./ui/skeleton"
+
 import type { Visibility } from "@/lib/types"
 
-export function CopyButton({ value, className }: { value: string; className?: string }) {
+import { Badge } from "./ui/badge"
+import { Button } from "./ui/button"
+import { Skeleton } from "./ui/skeleton"
+
+export function CopyButton({
+  value,
+  className,
+}: {
+  value: string
+  className?: string
+}) {
   const [copied, setCopied] = useState(false)
   async function copy() {
     try {
@@ -15,7 +24,9 @@ export function CopyButton({ value, className }: { value: string; className?: st
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      toast.error("Clipboard unavailable. Select and copy the command manually.")
+      toast.error(
+        "Clipboard unavailable. Select and copy the command manually.",
+      )
     }
   }
   return (
@@ -26,7 +37,11 @@ export function CopyButton({ value, className }: { value: string; className?: st
       onClick={copy}
       aria-label={copied ? "Copied" : "Copy to clipboard"}
     >
-      {copied ? <Check className="text-primary" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <Check className="text-primary" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
     </Button>
   )
 }
@@ -34,11 +49,14 @@ export function CopyButton({ value, className }: { value: string; className?: st
 export function CommandBlock({ command }: { command: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2 rounded-md border bg-[#0b1117] py-1 pl-3">
-      <span className="select-none font-mono text-xs text-primary/60">$</span>
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre py-2 font-mono text-[11px] text-slate-300">
+      <span className="font-mono text-xs text-primary/60 select-none">$</span>
+      <code className="min-w-0 flex-1 overflow-x-auto py-2 font-mono text-[11px] whitespace-pre text-slate-300">
         {command}
       </code>
-      <CopyButton value={command} className="mr-1 shrink-0 text-muted-foreground" />
+      <CopyButton
+        value={command}
+        className="mr-1 shrink-0 text-muted-foreground"
+      />
     </div>
   )
 }
@@ -46,13 +64,23 @@ export function CommandBlock({ command }: { command: string }) {
 export function VisibilityBadge({ visibility }: { visibility: Visibility }) {
   return (
     <Badge variant={visibility === "public" ? "default" : "secondary"}>
-      {visibility === "public" ? <Globe2 className="size-3" /> : <Lock className="size-3" />}
+      {visibility === "public" ? (
+        <Globe2 className="size-3" />
+      ) : (
+        <Lock className="size-3" />
+      )}
       {visibility === "public" ? "Public" : "Private"}
     </Badge>
   )
 }
 
-export function ErrorState({ message, retry }: { message: string; retry?: () => void }) {
+export function ErrorState({
+  message,
+  retry,
+}: {
+  message: string
+  retry?: () => void
+}) {
   return (
     <div
       role="alert"

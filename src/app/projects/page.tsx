@@ -1,8 +1,16 @@
 "use client"
-import { useState } from "react"
+
+import {
+  ArrowUpRight,
+  Box,
+  FolderOpen,
+  RefreshCw,
+  Search,
+  Tag,
+} from "lucide-react"
 import Link from "next/link"
-import { ArrowUpRight, Box, FolderOpen, RefreshCw, Search, Tag } from "lucide-react"
-import { useProjects } from "@/hooks/use-projects"
+import { useState } from "react"
+
 import { NewProjectDialog } from "@/components/new-project-dialog"
 import { ResourceIcon } from "@/components/resource-icon"
 import { ErrorState, TableSkeleton, VisibilityBadge } from "@/components/shared"
@@ -10,18 +18,21 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { useProjects } from "@/hooks/use-projects"
 
 export default function ProjectsPage() {
   const query = useProjects()
   const [search, setSearch] = useState("")
   const projects = (query.data?.projects ?? []).filter((project) =>
-    `${project.name} ${project.description}`.toLowerCase().includes(search.toLowerCase()),
+    `${project.name} ${project.description}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   )
   return (
     <div className="page-enter space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.16em] text-primary">
+          <p className="mb-2 text-[10px] font-medium tracking-[0.16em] text-primary uppercase">
             Namespaces for everything you ship
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
@@ -35,7 +46,7 @@ export default function ProjectsPage() {
       </div>
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
           <Input
             aria-label="Search projects"
             className="pl-9"
@@ -55,11 +66,14 @@ export default function ProjectsPage() {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {projects.length} {projects.length === 1 ? "project" : "projects"} · image paths use
-        project/image
+        {projects.length} {projects.length === 1 ? "project" : "projects"} ·
+        image paths use project/image
       </p>
       {query.isError ? (
-        <ErrorState message={query.error.message} retry={() => query.refetch()} />
+        <ErrorState
+          message={query.error.message}
+          retry={() => query.refetch()}
+        />
       ) : query.isPending ? (
         <Card>
           <TableSkeleton />
@@ -69,7 +83,9 @@ export default function ProjectsPage() {
           <div className="flex flex-col items-center py-16 text-center">
             <FolderOpen className="mb-5 size-10 text-primary/70" />
             <h2 className="font-medium">
-              {search ? "No matching projects" : "A namespace for your next great build"}
+              {search
+                ? "No matching projects"
+                : "A namespace for your next great build"}
             </h2>
             <p className="mt-2 max-w-sm text-sm text-muted-foreground">
               {search
@@ -81,7 +97,11 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
-            <Link key={project.name} href={`/projects/${project.name}`} className="group">
+            <Link
+              key={project.name}
+              href={`/projects/${project.name}`}
+              className="group"
+            >
               <Card className="h-full p-5 transition-colors hover:border-primary/40">
                 <div className="mb-5 flex items-center justify-between">
                   <ResourceIcon
@@ -99,7 +119,8 @@ export default function ProjectsPage() {
                   <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-primary" />
                 </div>
                 <p className="mt-2 line-clamp-2 min-h-9 text-xs leading-relaxed text-muted-foreground">
-                  {project.description || `Images published under ${project.name}/…`}
+                  {project.description ||
+                    `Images published under ${project.name}/…`}
                 </p>
                 <div className="mt-5 flex items-center gap-4 border-t pt-4 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5">
@@ -121,7 +142,8 @@ export default function ProjectsPage() {
           <div className="flex items-center gap-3">
             <Badge variant="secondary">Legacy</Badge>
             <p className="text-xs text-muted-foreground">
-              {query.data?.ungroupedCount} unscoped images retain their existing paths.
+              {query.data?.ungroupedCount} unscoped images retain their existing
+              paths.
             </p>
           </div>
           <Button variant="outline" size="sm" asChild>

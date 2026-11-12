@@ -1,15 +1,16 @@
 "use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+
 import { api } from "@/lib/api-client"
 import { repositoryIdentity } from "@/lib/image-names"
+
 import { Button } from "./ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 
 export function DeleteResourceDialog({
   kind,
@@ -46,18 +49,27 @@ export function DeleteResourceDialog({
       setConfirmation("")
       // Drop stale detail data before a resource name can be reused.
       await Promise.all(
-        ["repository", "project"].map((key) => client.cancelQueries({ queryKey: [key] })),
+        ["repository", "project"].map((key) =>
+          client.cancelQueries({ queryKey: [key] }),
+        ),
       )
       client.removeQueries({ queryKey: ["repository"] })
       client.removeQueries({ queryKey: ["project"] })
       for (const key of ["repositories", "projects", "activity"])
         void client.invalidateQueries({ queryKey: [key] })
       toast.success(
-        kind === "project" ? "Project and its images deleted." : "Image and all its tags deleted.",
+        kind === "project"
+          ? "Project and its images deleted."
+          : "Image and all its tags deleted.",
       )
-      const project = kind === "image" ? repositoryIdentity(name).projectName : null
+      const project =
+        kind === "image" ? repositoryIdentity(name).projectName : null
       router.push(
-        project ? `/projects/${project}` : kind === "project" ? "/projects" : "/repositories",
+        project
+          ? `/projects/${project}`
+          : kind === "project"
+            ? "/projects"
+            : "/repositories",
       )
     },
     onError: (error) => toast.error(error.message),
@@ -95,24 +107,28 @@ export function DeleteResourceDialog({
               <DialogDescription>
                 This permanently removes{" "}
                 {kind === "project" ? `${imageCount ?? 0} images and ` : ""}
-                {tagCount} tags from Dockyard. Pause publishers before deleting. Already-issued
-                Docker tokens can remain valid for up to five minutes, and stored layers/untagged
-                manifests require registry garbage collection to reclaim space.
+                {tagCount} tags from Dockyard. Pause publishers before deleting.
+                Already-issued Docker tokens can remain valid for up to five
+                minutes, and stored layers/untagged manifests require registry
+                garbage collection to reclaim space.
               </DialogDescription>
             </DialogHeader>
-            <p className="min-w-0 break-all text-sm">
-              Type <strong className="font-mono">{name}</strong> to confirm. Reusing a deleted name
-              requires explicitly creating it again.
+            <p className="min-w-0 text-sm break-all">
+              Type <strong className="font-mono">{name}</strong> to confirm.
+              Reusing a deleted name requires explicitly creating it again.
             </p>
             <form
               className="min-w-0 space-y-5"
               onSubmit={(event) => {
                 event.preventDefault()
-                if (confirmation === name && !deletion.isPending) deletion.mutate()
+                if (confirmation === name && !deletion.isPending)
+                  deletion.mutate()
               }}
             >
               <div className="min-w-0 space-y-2">
-                <Label htmlFor={`delete-${kind}-confirmation`}>Confirm {kind} name</Label>
+                <Label htmlFor={`delete-${kind}-confirmation`}>
+                  Confirm {kind} name
+                </Label>
                 <Input
                   id={`delete-${kind}-confirmation`}
                   className="min-w-0 font-mono text-xs"
@@ -140,8 +156,12 @@ export function DeleteResourceDialog({
                   variant="destructive"
                   disabled={deletion.isPending || confirmation !== name}
                 >
-                  {deletion.isPending ? <Loader2 className="animate-spin" /> : <Trash2 />}Delete{" "}
-                  {kind}
+                  {deletion.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 />
+                  )}
+                  Delete {kind}
                 </Button>
               </DialogFooter>
             </form>

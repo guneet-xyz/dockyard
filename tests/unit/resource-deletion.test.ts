@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import {
-  deleteTaggedManifests,
-  deleteImageRepository,
-  deleteProject,
-} from "@/lib/resource-deletion"
+
 import type { DatabaseExecutor } from "@/lib/db"
 import { HttpError } from "@/lib/http"
+import {
+  deleteImageRepository,
+  deleteProject,
+  deleteTaggedManifests,
+} from "@/lib/resource-deletion"
 import type { SessionUser } from "@/lib/types"
 
 const mocks = vi.hoisted(() => ({
@@ -20,7 +21,10 @@ const mocks = vi.hoisted(() => ({
   failureAudit: vi.fn(),
 }))
 vi.mock("@/lib/db", () => ({
-  db: () => ({ transaction: mocks.transaction, insert: () => ({ values: mocks.failureAudit }) }),
+  db: () => ({
+    transaction: mocks.transaction,
+    insert: () => ({ values: mocks.failureAudit }),
+  }),
 }))
 vi.mock("@/lib/registry", () => ({
   listTags: mocks.tags,
@@ -48,17 +52,25 @@ beforeEach(() => {
 
 describe("delete every tagged manifest in an image", () => {
   it("deletes shared alias digests once and resolves the complete plan before deleting", async () => {
-    mocks.tags.mockResolvedValueOnce(["latest", "1.0", "2.0"]).mockResolvedValueOnce([])
+    mocks.tags
+      .mockResolvedValueOnce(["latest", "1.0", "2.0"])
+      .mockResolvedValueOnce([])
     mocks.request.mockImplementation(
       async (path: string) =>
         new Response(null, {
-          headers: { "Docker-Content-Digest": path.endsWith("2.0") ? second : first },
+          headers: {
+            "Docker-Content-Digest": path.endsWith("2.0") ? second : first,
+          },
         }),
     )
     const removed = vi.fn()
     await deleteTaggedManifests("team/api", connection, removed)
     expect(mocks.request).toHaveBeenCalledTimes(3)
-    expect(mocks.request).toHaveBeenCalledWith("/v2/team/api/manifests/latest", "team/api", "HEAD")
+    expect(mocks.request).toHaveBeenCalledWith(
+      "/v2/team/api/manifests/latest",
+      "team/api",
+      "HEAD",
+    )
     expect(mocks.deleteManifest.mock.calls).toEqual([
       ["team/api", first],
       ["team/api", second],
@@ -71,23 +83,27 @@ describe("delete every tagged manifest in an image", () => {
   it("refuses an invalid digest or a failed plan without deleting anything", async () => {
     mocks.tags.mockResolvedValue(["latest"])
     mocks.request.mockResolvedValue(
-      new Response(null, { headers: { "Docker-Content-Digest": "../../wrong" } }),
+      new Response(null, {
+        headers: { "Docker-Content-Digest": "../../wrong" },
+      }),
     )
-    await expect(deleteTaggedManifests("team/api", connection, vi.fn())).rejects.toThrow(
-      "invalid manifest digest",
-    )
+    await expect(
+      deleteTaggedManifests("team/api", connection, vi.fn()),
+    ).rejects.toThrow("invalid manifest digest")
     expect(mocks.deleteManifest).not.toHaveBeenCalled()
     mocks.request.mockRejectedValue(new HttpError(503, "Unavailable"))
-    await expect(deleteTaggedManifests("team/api", connection, vi.fn())).rejects.toThrow(
-      "Unavailable",
-    )
+    await expect(
+      deleteTaggedManifests("team/api", connection, vi.fn()),
+    ).rejects.toThrow("Unavailable")
     expect(mocks.deleteManifest).not.toHaveBeenCalled()
   })
   it("handles empty reserved images and already-removed tags/manifests idempotently", async () => {
     mocks.tags.mockResolvedValueOnce([]).mockResolvedValueOnce([])
     await deleteTaggedManifests("team/empty", connection, vi.fn())
     expect(mocks.deleteManifest).not.toHaveBeenCalled()
-    mocks.tags.mockResolvedValueOnce(["gone", "latest"]).mockResolvedValueOnce([])
+    mocks.tags
+      .mockResolvedValueOnce(["gone", "latest"])
+      .mockResolvedValueOnce([])
     mocks.request.mockImplementation(async (path: string) => {
       if (path.endsWith("gone")) throw new HttpError(404, "Gone")
       return new Response(null, { headers: { "Docker-Content-Digest": first } })
@@ -98,29 +114,33 @@ describe("delete every tagged manifest in an image", () => {
     expect(removed).not.toHaveBeenCalled()
   })
   it("detects pushes that race with deletion instead of claiming success", async () => {
-    mocks.tags.mockResolvedValueOnce(["latest"]).mockResolvedValueOnce(["new-tag"])
+    mocks.tags
+      .mockResolvedValueOnce(["latest"])
+      .mockResolvedValueOnce(["new-tag"])
     mocks.request.mockResolvedValue(
       new Response(null, { headers: { "Docker-Content-Digest": first } }),
     )
-    await expect(deleteTaggedManifests("team/api", connection, vi.fn())).rejects.toThrow(
-      "New tags appeared",
-    )
+    await expect(
+      deleteTaggedManifests("team/api", connection, vi.fn()),
+    ).rejects.toThrow("New tags appeared")
   })
   it("does not hide a registry failure after a previous manifest was removed", async () => {
     mocks.tags.mockResolvedValueOnce(["one", "two"])
     mocks.request.mockImplementation(
       async (path: string) =>
         new Response(null, {
-          headers: { "Docker-Content-Digest": path.endsWith("one") ? first : second },
+          headers: {
+            "Docker-Content-Digest": path.endsWith("one") ? first : second,
+          },
         }),
     )
     mocks.deleteManifest
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new HttpError(503, "Unavailable"))
     const removed = vi.fn()
-    await expect(deleteTaggedManifests("team/api", connection, removed)).rejects.toThrow(
-      "Unavailable",
-    )
+    await expect(
+      deleteTaggedManifests("team/api", connection, removed),
+    ).rejects.toThrow("Unavailable")
     expect(removed).toHaveBeenCalledTimes(1)
   })
   it("rejects viewers and disabled actors before any privileged registry operation", async () => {
@@ -131,7 +151,9 @@ describe("delete every tagged manifest in an image", () => {
       role: "viewer",
       enabled: true,
     }
-    await expect(deleteImageRepository("team/api", viewer)).rejects.toThrow("Maintainer")
+    await expect(deleteImageRepository("team/api", viewer)).rejects.toThrow(
+      "Maintainer",
+    )
     await expect(deleteProject("team", viewer)).rejects.toThrow("Maintainer")
     await expect(
       deleteProject("team", { ...viewer, role: "admin", enabled: false }),
@@ -149,7 +171,9 @@ describe("delete every tagged manifest in an image", () => {
     const tx = {
       execute: mocks.txExecute,
       insert: mocks.txInsert,
-      select: () => ({ from: () => ({ where: () => ({ limit: async () => [project] }) }) }),
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [project] }) }),
+      }),
     }
     mocks.transaction.mockImplementation(async (callback) => callback(tx))
     mocks.txExecute.mockResolvedValue([])
@@ -164,7 +188,9 @@ describe("delete every tagged manifest in an image", () => {
     mocks.request.mockImplementation(
       async (path: string) =>
         new Response(null, {
-          headers: { "Docker-Content-Digest": path.includes("team/a/") ? first : second },
+          headers: {
+            "Docker-Content-Digest": path.includes("team/a/") ? first : second,
+          },
         }),
     )
     mocks.deleteManifest

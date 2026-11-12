@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+
 import {
   assertKeyRotatable,
   generateKeyCredentials,
@@ -14,16 +15,33 @@ const requested = ["pull", "push", "delete", "*", "unknown"]
 
 describe("scoped automation key permissions", () => {
   it("project grants match only the exact namespace boundary", () => {
-    const grants: KeyGrant[] = [{ type: "project", target: "dockyard", actions: ["pull", "push"] }]
-    expect(allowedKeyActions(grants, "maintainer", "private", "dockyard/init", requested)).toEqual([
-      "pull",
-      "push",
-    ])
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard-tools/init", requested)).toEqual(
-      [],
-    )
-    expect(allowedKeyActions(grants, "admin", "public", "other/dockyard", requested)).toEqual([])
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard", requested)).toEqual([])
+    const grants: KeyGrant[] = [
+      { type: "project", target: "dockyard", actions: ["pull", "push"] },
+    ]
+    expect(
+      allowedKeyActions(
+        grants,
+        "maintainer",
+        "private",
+        "dockyard/init",
+        requested,
+      ),
+    ).toEqual(["pull", "push"])
+    expect(
+      allowedKeyActions(
+        grants,
+        "admin",
+        "public",
+        "dockyard-tools/init",
+        requested,
+      ),
+    ).toEqual([])
+    expect(
+      allowedKeyActions(grants, "admin", "public", "other/dockyard", requested),
+    ).toEqual([])
+    expect(
+      allowedKeyActions(grants, "admin", "public", "dockyard", requested),
+    ).toEqual([])
   })
 
   it("image grants match exactly, including legacy names", () => {
@@ -31,16 +49,30 @@ describe("scoped automation key permissions", () => {
       { type: "image", target: "dockyard/init", actions: ["pull"] },
       { type: "image", target: "legacy/deep/image", actions: ["pull"] },
     ]
-    expect(allowedKeyActions(grants, "admin", "private", "dockyard/init", requested)).toEqual([
-      "pull",
-    ])
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard/init-extra", requested)).toEqual(
-      [],
-    )
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard/web", requested)).toEqual([])
-    expect(allowedKeyActions(grants, "viewer", "private", "legacy/deep/image", requested)).toEqual([
-      "pull",
-    ])
+    expect(
+      allowedKeyActions(grants, "admin", "private", "dockyard/init", requested),
+    ).toEqual(["pull"])
+    expect(
+      allowedKeyActions(
+        grants,
+        "admin",
+        "public",
+        "dockyard/init-extra",
+        requested,
+      ),
+    ).toEqual([])
+    expect(
+      allowedKeyActions(grants, "admin", "public", "dockyard/web", requested),
+    ).toEqual([])
+    expect(
+      allowedKeyActions(
+        grants,
+        "viewer",
+        "private",
+        "legacy/deep/image",
+        requested,
+      ),
+    ).toEqual(["pull"])
   })
 
   it("intersects additive grants with requested actions and the current owner role", () => {
@@ -48,21 +80,30 @@ describe("scoped automation key permissions", () => {
       { type: "project", target: "dockyard", actions: ["pull"] },
       { type: "image", target: "dockyard/init", actions: ["push", "delete"] },
     ]
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard/init", requested)).toEqual([
-      "pull",
-      "push",
-      "delete",
-    ])
-    expect(allowedKeyActions(grants, "viewer", "private", "dockyard/init", requested)).toEqual([
-      "pull",
-    ])
     expect(
-      allowedKeyActions(grants, "maintainer", "public", "dockyard/init", ["push", "push"]),
+      allowedKeyActions(grants, "admin", "public", "dockyard/init", requested),
+    ).toEqual(["pull", "push", "delete"])
+    expect(
+      allowedKeyActions(
+        grants,
+        "viewer",
+        "private",
+        "dockyard/init",
+        requested,
+      ),
+    ).toEqual(["pull"])
+    expect(
+      allowedKeyActions(grants, "maintainer", "public", "dockyard/init", [
+        "push",
+        "push",
+      ]),
     ).toEqual(["push"])
-    expect(allowedKeyActions(grants, "admin", "public", "dockyard/web", requested)).toEqual([
-      "pull",
-    ])
-    expect(allowedKeyActions([], "admin", "public", "dockyard/init", requested)).toEqual([])
+    expect(
+      allowedKeyActions(grants, "admin", "public", "dockyard/web", requested),
+    ).toEqual(["pull"])
+    expect(
+      allowedKeyActions([], "admin", "public", "dockyard/init", requested),
+    ).toEqual([])
   })
 
   it("does not silently fall back to anonymous public pulls outside a key's grants", () => {
@@ -112,18 +153,20 @@ describe("key credentials and expiry", () => {
   it("allows only active keys to rotate and preserves the token expiry boundary", () => {
     const active = { revokedAt: null, expiresAt: null, ownerEnabled: true }
     expect(() => assertKeyRotatable(active, 1000)).not.toThrow()
-    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(2000) }, 1000)).not.toThrow()
-    expect(() => assertKeyRotatable({ ...active, revokedAt: new Date(500) }, 1000)).toThrow(
-      "Revoked keys",
-    )
-    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(1000) }, 1000)).toThrow(
-      "Expired keys",
-    )
-    expect(() => assertKeyRotatable({ ...active, expiresAt: new Date(1500) }, 1000)).toThrow(
-      "Expired keys",
-    )
-    expect(() => assertKeyRotatable({ ...active, ownerEnabled: false }, 1000)).toThrow(
-      "disabled owner",
-    )
+    expect(() =>
+      assertKeyRotatable({ ...active, expiresAt: new Date(2000) }, 1000),
+    ).not.toThrow()
+    expect(() =>
+      assertKeyRotatable({ ...active, revokedAt: new Date(500) }, 1000),
+    ).toThrow("Revoked keys")
+    expect(() =>
+      assertKeyRotatable({ ...active, expiresAt: new Date(1000) }, 1000),
+    ).toThrow("Expired keys")
+    expect(() =>
+      assertKeyRotatable({ ...active, expiresAt: new Date(1500) }, 1000),
+    ).toThrow("Expired keys")
+    expect(() =>
+      assertKeyRotatable({ ...active, ownerEnabled: false }, 1000),
+    ).toThrow("disabled owner")
   })
 })

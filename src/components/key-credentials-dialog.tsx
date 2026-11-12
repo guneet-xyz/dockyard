@@ -1,11 +1,16 @@
 "use client"
-import { useState } from "react"
+
 import { Download, Eye, EyeOff } from "lucide-react"
-import { keyExportFilename, serializeKeyCredentials, type KeyCredentials } from "@/lib/key-export"
+import { useState } from "react"
+
+import {
+  keyExportFilename,
+  serializeKeyCredentials,
+  type KeyCredentials,
+} from "@/lib/key-export"
+
 import { CommandBlock, CopyButton } from "./shared"
 import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
 import {
   Dialog,
   DialogContent,
@@ -14,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 
 export function KeyCredentialsDialog({
   credentials,
@@ -25,7 +32,9 @@ export function KeyCredentialsDialog({
   const [showSecret, setShowSecret] = useState(false)
   function download() {
     const url = URL.createObjectURL(
-      new Blob([serializeKeyCredentials(credentials)], { type: "application/json;charset=utf-8" }),
+      new Blob([serializeKeyCredentials(credentials)], {
+        type: "application/json;charset=utf-8",
+      }),
     )
     const anchor = document.createElement("a")
     try {
@@ -49,8 +58,8 @@ export function KeyCredentialsDialog({
         <DialogHeader>
           <DialogTitle>Save your key secret</DialogTitle>
           <DialogDescription>
-            This is the only time Dockyard will show the secret. Store it in your CI secret manager;
-            it cannot be retrieved later.
+            This is the only time Dockyard will show the secret. Store it in
+            your CI secret manager; it cannot be retrieved later.
           </DialogDescription>
         </DialogHeader>
         <div className="min-w-0 space-y-4">
@@ -93,14 +102,19 @@ export function KeyCredentialsDialog({
             command={`printf '%s' "$DOCKYARD_KEY" | docker login ${credentials.registryHost} --username ${credentials.username} --password-stdin`}
           />
           <p className="text-xs text-muted-foreground">
-            Set DOCKYARD_KEY to the secret in your CI environment. Do not put the secret directly in
-            a command or commit it to your repository.
+            Set DOCKYARD_KEY to the secret in your CI environment. Do not put
+            the secret directly in a command or commit it to your repository.
           </p>
           <p className="text-xs text-amber-300">
-            Downloaded JSON includes the unencrypted key secret. Keep it private and out of Git.
+            Downloaded JSON includes the unencrypted key secret. Keep it private
+            and out of Git.
           </p>
           <DialogFooter className="flex-col sm:flex-row">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={download}>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={download}
+            >
               <Download />
               Download JSON
             </Button>

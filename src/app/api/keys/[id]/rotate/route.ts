@@ -1,14 +1,18 @@
-import { NextResponse } from "next/server"
 import { and, eq } from "drizzle-orm"
+import { NextResponse } from "next/server"
 import { z } from "zod"
-import { requireUser, credentialAttemptKey } from "@/lib/auth"
+
 import { assertKeyRotatable, generateKeyCredentials } from "@/lib/access-keys"
+import { credentialAttemptKey, requireUser } from "@/lib/auth"
 import { config } from "@/lib/config"
 import { db } from "@/lib/db"
 import { accessKeys, auditEvents, loginAttempts, users } from "@/lib/db/schema"
 import { apiError, assertSameOrigin, HttpError } from "@/lib/http"
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   try {
     assertSameOrigin(request)
     const actor = await requireUser()
@@ -25,7 +29,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         .where(
           and(
             eq(accessKeys.id, id),
-            actor.role === "admin" ? undefined : eq(accessKeys.ownerId, actor.id),
+            actor.role === "admin"
+              ? undefined
+              : eq(accessKeys.ownerId, actor.id),
           ),
         )
         .limit(1)
@@ -45,7 +51,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         actor: actor.username,
         action: "key.rotate",
         target: row.key.name,
-        details: { keyId: id, ownerId: row.key.ownerId, rotatedAt: rotatedAt.toISOString() },
+        details: {
+          keyId: id,
+          ownerId: row.key.ownerId,
+          rotatedAt: rotatedAt.toISOString(),
+        },
       })
       return {
         id,
@@ -57,7 +67,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         registryHost: config.registryHost,
       }
     })
-    return NextResponse.json(credentials, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json(credentials, {
+      headers: { "Cache-Control": "no-store" },
+    })
   } catch (error) {
     return apiError(error)
   }

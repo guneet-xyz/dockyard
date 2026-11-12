@@ -1,6 +1,8 @@
 "use client"
-import * as React from "react"
+
 import * as DropdownPrimitive from "@radix-ui/react-dropdown-menu"
+import * as React from "react"
+
 import { cn } from "@/lib/utils"
 
 export const DropdownMenu = DropdownPrimitive.Root
@@ -30,7 +32,7 @@ export function DropdownMenuItem({
   return (
     <DropdownPrimitive.Item
       className={cn(
-        "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none transition-colors focus:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
+        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-2 text-sm transition-colors outline-none select-none focus:bg-accent data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4",
         className,
       )}
       {...props}
@@ -40,5 +42,10 @@ export function DropdownMenuItem({
 export function DropdownMenuSeparator(
   props: React.ComponentProps<typeof DropdownPrimitive.Separator>,
 ) {
-  return <DropdownPrimitive.Separator className="-mx-1 my-1 h-px bg-border" {...props} />
+  return (
+    <DropdownPrimitive.Separator
+      className="-mx-1 my-1 h-px bg-border"
+      {...props}
+    />
+  )
 }

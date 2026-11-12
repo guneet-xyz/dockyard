@@ -4,14 +4,22 @@ export function canWrite(user: Pick<SessionUser, "role"> | null) {
   return user?.role === "admin" || user?.role === "maintainer"
 }
 
-export function canRead(user: Pick<SessionUser, "role"> | null, visibility: Visibility) {
+export function canRead(
+  user: Pick<SessionUser, "role"> | null,
+  visibility: Visibility,
+) {
   return visibility === "public" || user !== null
 }
 
-export function allowedActions(role: Role | null, visibility: Visibility, requested: string[]) {
+export function allowedActions(
+  role: Role | null,
+  visibility: Visibility,
+  requested: string[],
+) {
   return [...new Set(requested)].filter((action) => {
     if (action === "pull") return visibility === "public" || role !== null
-    if (action === "push" || action === "delete") return role === "admin" || role === "maintainer"
+    if (action === "push" || action === "delete")
+      return role === "admin" || role === "maintainer"
     return false
   })
 }

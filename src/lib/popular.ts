@@ -1,6 +1,6 @@
+import { config } from "./config"
 import { db } from "./db"
 import { projects as projectTable } from "./db/schema"
-import { config } from "./config"
 import { logoReferences } from "./logo-references"
 import { summarizeProjects } from "./projects"
 import { listRepositories } from "./registry"
@@ -13,7 +13,11 @@ function byPopularity(
   a: { name: string; pullCount: number; tagCount: number },
   b: { name: string; pullCount: number; tagCount: number },
 ) {
-  return b.pullCount - a.pullCount || b.tagCount - a.tagCount || a.name.localeCompare(b.name)
+  return (
+    b.pullCount - a.pullCount ||
+    b.tagCount - a.tagCount ||
+    a.name.localeCompare(b.name)
+  )
 }
 
 // Inputs must come from the anonymous view so private images never contribute pulls.
@@ -25,13 +29,18 @@ export function rankPopular(
   const publicProjects = projects.filter(
     (project) => project.visibility === "public" && project.imageCount > 0,
   )
-  const publicImages = images.filter((image) => image.visibility === "public" && image.tagCount > 0)
+  const publicImages = images.filter(
+    (image) => image.visibility === "public" && image.tagCount > 0,
+  )
   return {
     projects: [...publicProjects].sort(byPopularity).slice(0, limits.projects),
     images: [...publicImages].sort(byPopularity).slice(0, limits.images),
     publicProjectCount: publicProjects.length,
     publicImageCount: publicImages.length,
-    publicPullCount: publicImages.reduce((sum, image) => sum + image.pullCount, 0),
+    publicPullCount: publicImages.reduce(
+      (sum, image) => sum + image.pullCount,
+      0,
+    ),
   }
 }
 

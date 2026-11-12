@@ -108,7 +108,9 @@ Creation accepts:
 ```json
 {
   "name": "release-init",
-  "grants": [{ "type": "image", "target": "dockyard/init", "actions": ["pull", "push"] }],
+  "grants": [
+    { "type": "image", "target": "dockyard/init", "actions": ["pull", "push"] }
+  ],
   "expiresAt": "2027-01-01T00:00:00Z"
 }
 ```

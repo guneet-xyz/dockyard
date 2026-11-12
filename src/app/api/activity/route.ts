@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server"
 import { desc } from "drizzle-orm"
+import { NextResponse } from "next/server"
+
 import { requireUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { auditEvents } from "@/lib/db/schema"
@@ -21,7 +22,10 @@ export async function GET() {
       .from(auditEvents)
       .orderBy(desc(auditEvents.createdAt))
       .limit(100)
-    return NextResponse.json({ events }, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json(
+      { events },
+      { headers: { "Cache-Control": "no-store" } },
+    )
   } catch (error) {
     return apiError(error)
   }

@@ -64,7 +64,11 @@ const sha = "a".repeat(40)
 const olderSha = "b".repeat(40)
 
 afterEach(async () => {
-  await Promise.all(folders.splice(0).map((folder) => rm(folder, { recursive: true, force: true })))
+  await Promise.all(
+    folders
+      .splice(0)
+      .map((folder) => rm(folder, { recursive: true, force: true })),
+  )
 })
 
 describe("release and publishing workflow contracts", () => {
@@ -76,7 +80,9 @@ describe("release and publishing workflow contracts", () => {
     expect(ci.permissions).toEqual({ contents: "read" })
     expect(load(".github/workflows/ci.yml")).not.toContain("secrets.DOCKER_")
     expect(release.on.push?.branches).toEqual(["main"])
-    expect(release.jobs.prepare.if).toContain("github.repository == 'guneet-xyz/dockyard'")
+    expect(release.jobs.prepare.if).toContain(
+      "github.repository == 'guneet-xyz/dockyard'",
+    )
     expect(release.jobs.prepare.if).toContain("github.ref == 'refs/heads/main'")
     expect(release.jobs.checks.uses).toBe("./.github/workflows/ci.yml")
     expect(release.jobs.checks.needs).toBe("prepare")
@@ -84,7 +90,9 @@ describe("release and publishing workflow contracts", () => {
     expect(smoke.needs).toEqual(["prepare", "build"])
     expect(publisher.needs).toEqual(["prepare", "smoke"])
     for (const job of [builder, smoke]) {
-      const checkout = job.steps!.find((step) => step.uses?.startsWith("actions/checkout@"))
+      const checkout = job.steps!.find((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      )
       expect(checkout?.with?.ref).toBe(release.jobs.checks.with?.ref)
     }
     for (const job of [builder, smoke, publisher]) {
@@ -93,7 +101,9 @@ describe("release and publishing workflow contracts", () => {
       expect(job).not.toHaveProperty("uses")
     }
     expect(
-      release.jobs.prepare.steps?.find((step) => step.name?.startsWith("Dispatch quality"))?.run,
+      release.jobs.prepare.steps?.find((step) =>
+        step.name?.startsWith("Dispatch quality"),
+      )?.run,
     ).toContain('gh workflow run ci.yml --ref "$branch"')
   })
 
@@ -101,7 +111,13 @@ describe("release and publishing workflow contracts", () => {
     const released = "needs.prepare.outputs.release == 'true'"
     for (const job of ["checks", "build", "smoke", "publish"])
       expect(release.jobs[job].if).toBe(released)
-    expect(Object.keys(release.jobs)).toEqual(["prepare", "checks", "build", "smoke", "publish"])
+    expect(Object.keys(release.jobs)).toEqual([
+      "prepare",
+      "checks",
+      "build",
+      "smoke",
+      "publish",
+    ])
     const checkout = release.jobs.prepare.steps!.find((step) =>
       step.uses?.startsWith("actions/checkout@"),
     )
@@ -110,20 +126,34 @@ describe("release and publishing workflow contracts", () => {
 
   it("has no manual or other publishing trigger besides pushes to main", () => {
     expect(Object.keys(release.on)).toEqual(["push"])
-    expect(load(".github/workflows/release.yml")).not.toMatch(/workflow_dispatch:|inputs\./)
-    expect(load(".github/workflows/ci.yml")).not.toContain("docker/login-action")
-    expect(load(".github/workflows/ci.yml")).not.toMatch(/imagetools|push-by-digest/)
+    expect(load(".github/workflows/release.yml")).not.toMatch(
+      /workflow_dispatch:|inputs\./,
+    )
+    expect(load(".github/workflows/ci.yml")).not.toContain(
+      "docker/login-action",
+    )
+    expect(load(".github/workflows/ci.yml")).not.toMatch(
+      /imagetools|push-by-digest/,
+    )
   })
 
   it("pins every action to a full commit SHA with a version comment", () => {
-    for (const path of [".github/workflows/ci.yml", ".github/workflows/release.yml"]) {
+    for (const path of [
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+    ]) {
       const uses = load(path)
         .split("\n")
         .map((line) => /^\s*(?:-\s+)?uses:\s*(.+)$/.exec(line)?.[1])
-        .filter((value): value is string => value !== undefined && !value.startsWith("./"))
+        .filter(
+          (value): value is string =>
+            value !== undefined && !value.startsWith("./"),
+        )
       expect(uses.length).toBeGreaterThan(0)
       for (const value of uses)
-        expect(value).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/)
+        expect(value).toMatch(
+          /^[\w.-]+\/[\w.-]+@[0-9a-f]{40} # v\d+\.\d+\.\d+$/,
+        )
     }
   })
 
@@ -131,7 +161,9 @@ describe("release and publishing workflow contracts", () => {
     const matrix = builder.strategy!.matrix
     expect(matrix.target).toEqual(["init", "migrate", "web", "ingress"])
     for (const target of matrix.target!)
-      expect(load("Dockerfile")).toMatch(new RegExp(`^FROM .+ AS ${target}$`, "m"))
+      expect(load("Dockerfile")).toMatch(
+        new RegExp(`^FROM .+ AS ${target}$`, "m"),
+      )
     const runners = [
       { platform: "linux/amd64", arch: "amd64", runner: "ubuntu-24.04" },
       { platform: "linux/arm64", arch: "arm64", runner: "ubuntu-24.04-arm" },
@@ -141,7 +173,9 @@ describe("release and publishing workflow contracts", () => {
     expect(smoke.strategy!.matrix.include).toEqual(runners)
     expect(builder["runs-on"]).toBe("${{ matrix.runner }}")
     expect(smoke["runs-on"]).toBe("${{ matrix.runner }}")
-    expect(load(".github/workflows/release.yml")).not.toContain("setup-qemu-action")
+    expect(load(".github/workflows/release.yml")).not.toContain(
+      "setup-qemu-action",
+    )
     const build = step(builder, "build")
     expect(build.with?.platforms).toBe("${{ matrix.platform }}")
     expect(build.with?.target).toBe("${{ matrix.target }}")
@@ -154,13 +188,19 @@ describe("release and publishing workflow contracts", () => {
     expect(build.with?.sbom).toBe(true)
     expect(build.with).not.toHaveProperty("build-args")
     expect(build.with).not.toHaveProperty("secrets")
-    expect(step(builder, "Log in to the Dockyard registry").with?.registry).toBe("cr.guneet.dev")
-    expect(step(publisher, "Log in to the Dockyard registry").with?.registry).toBe("cr.guneet.dev")
+    expect(
+      step(builder, "Log in to the Dockyard registry").with?.registry,
+    ).toBe("cr.guneet.dev")
+    expect(
+      step(publisher, "Log in to the Dockyard registry").with?.registry,
+    ).toBe("cr.guneet.dev")
   })
 
   it("publishes only v-prefixed version tags and latest, with no edge or SHA tags", () => {
     const metadata = step(builder, "meta")
-    expect(metadata.with?.images).toBe("cr.guneet.dev/dockyard/${{ matrix.target }}")
+    expect(metadata.with?.images).toBe(
+      "cr.guneet.dev/dockyard/${{ matrix.target }}",
+    )
     expect(metadata.with?.flavor).toBe("latest=false")
     expect(metadata.with?.context).toBe("workflow")
     expect(metadata.with?.labels).toContain(
@@ -187,8 +227,11 @@ describe("release and publishing workflow contracts", () => {
     expect(config.packages["."]["include-component-in-tag"]).toBe(false)
     expect(config.packages["."]["initial-version"]).toBe("0.1.0")
     expect(config.packages["."]["bump-minor-pre-major"]).toBe(true)
-    expect(config.packages["."]).not.toHaveProperty("bump-patch-for-minor-pre-major")
-    if (manifest["."]) expect(manifest["."]).toBe(JSON.parse(load("package.json")).version)
+    expect(config.packages["."]).not.toHaveProperty(
+      "bump-patch-for-minor-pre-major",
+    )
+    if (manifest["."])
+      expect(manifest["."]).toBe(JSON.parse(load("package.json")).version)
     expect(load(".prettierignore")).toContain("CHANGELOG.md")
     expect(load(".prettierignore")).toContain(".release-please-manifest.json")
   })
@@ -230,28 +273,40 @@ describe("publication preflight and early-failure cleanup", () => {
     async (key) => {
       await expect(checkCredentials({ [key]: "" })).rejects.toMatchObject({
         code: 1,
-        stderr: "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment\n",
+        stderr:
+          "Set DOCKER_USERNAME and DOCKER_PASSWORD secrets in the release environment\n",
       })
     },
   )
   it("refuses to build without a release version, or with a different or prerelease one", async () => {
-    await expect(checkCredentials({ RELEASE_VERSION: "" })).rejects.toMatchObject({ code: 1 })
-    await expect(checkCredentials({ RELEASE_VERSION: "999.0.0" })).rejects.toMatchObject({
+    await expect(
+      checkCredentials({ RELEASE_VERSION: "" }),
+    ).rejects.toMatchObject({ code: 1 })
+    await expect(
+      checkCredentials({ RELEASE_VERSION: "999.0.0" }),
+    ).rejects.toMatchObject({
       code: 1,
     })
-    await expect(checkCredentials({ RELEASE_VERSION: `${version}-rc.1` })).rejects.toMatchObject({
+    await expect(
+      checkCredentials({ RELEASE_VERSION: `${version}-rc.1` }),
+    ).rejects.toMatchObject({
       code: 1,
     })
   })
   it("skips Compose logs and cleanup when failure occurs before environment generation", async () => {
     const folder = await mkdtemp(
-      join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), "dockyard-cleanup-test-"),
+      join(
+        existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(),
+        "dockyard-cleanup-test-",
+      ),
     )
     folders.push(folder)
     for (const job of [ci.jobs.checks, smoke])
       for (const name of ["Service logs on failure", "Stop test services"]) {
         const script = step(job, name).run!
-        await expect(execute("/bin/bash", ["-c", script], { cwd: folder })).resolves.toMatchObject({
+        await expect(
+          execute("/bin/bash", ["-c", script], { cwd: folder }),
+        ).resolves.toMatchObject({
           stdout: "",
           stderr: "",
         })
@@ -263,7 +318,10 @@ describe("read-only registry permission preflight", () => {
   const run = builder.steps!.find(
     (step) => step.name === "Verify scoped registry permissions",
   )!.run!
-  const script = run.slice(run.indexOf("const registry"), run.lastIndexOf("\nNODE"))
+  const script = run.slice(
+    run.indexOf("const registry"),
+    run.lastIndexOf("\nNODE"),
+  )
   function checkAccess({
     actions = ["pull", "push"],
     realm = "https://cr.guneet.dev/api/registry/token",
@@ -277,7 +335,13 @@ describe("read-only registry permission preflight", () => {
     target?: string
     repository?: string
   } = {}) {
-    const fixture = JSON.stringify({ actions, realm, status, repository, target })
+    const fixture = JSON.stringify({
+      actions,
+      realm,
+      status,
+      repository,
+      target,
+    })
     const mocked = `
       const fixture = ${fixture}
       let calls = 0
@@ -292,14 +356,18 @@ describe("read-only registry permission preflight", () => {
         return new Response(JSON.stringify({ token }), { status: fixture.status })
       }
     `
-    return execute(process.execPath, ["--input-type=module", "-e", `${mocked}\n${script}`], {
-      env: {
-        ...process.env,
-        DOCKER_USERNAME: "test-user",
-        DOCKER_PASSWORD: "test-secret",
-        TARGET: target,
+    return execute(
+      process.execPath,
+      ["--input-type=module", "-e", `${mocked}\n${script}`],
+      {
+        env: {
+          ...process.env,
+          DOCKER_USERNAME: "test-user",
+          DOCKER_PASSWORD: "test-secret",
+          TARGET: target,
+        },
       },
-    })
+    )
   }
   it.each(["init", "migrate", "web", "ingress"])(
     "accepts exact pull + push authorization for dockyard/%s",
@@ -314,7 +382,9 @@ describe("read-only registry permission preflight", () => {
       code: 1,
       stderr: expect.stringContaining("granted: pull"),
     })
-    await expect(checkAccess({ repository: "other/init" })).rejects.toMatchObject({
+    await expect(
+      checkAccess({ repository: "other/init" }),
+    ).rejects.toMatchObject({
       code: 1,
       stderr: expect.stringContaining("granted: none"),
     })
@@ -324,7 +394,9 @@ describe("read-only registry permission preflight", () => {
       code: 1,
       stderr: expect.stringContaining("Registry token request failed (401)"),
     })
-    await expect(checkAccess({ realm: "https://evil.example/token" })).rejects.toMatchObject({
+    await expect(
+      checkAccess({ realm: "https://evil.example/token" }),
+    ).rejects.toMatchObject({
       code: 1,
       stderr: expect.stringContaining("Refusing to forward credentials"),
     })
@@ -333,7 +405,10 @@ describe("read-only registry permission preflight", () => {
 
 async function temporaryFolder(prefix: string) {
   const folder = await mkdtemp(
-    join(existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(), `dockyard-${prefix}-`),
+    join(
+      existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir(),
+      `dockyard-${prefix}-`,
+    ),
   )
   folders.push(folder)
   return folder
@@ -380,7 +455,11 @@ describe("release source resolution", () => {
   })
   it("publishes the exact newly released commit", async () => {
     expect(
-      await resolve({ RELEASE_CREATED: "true", RELEASE_TAG: "v1.2.3", RELEASE_SHA: sha }),
+      await resolve({
+        RELEASE_CREATED: "true",
+        RELEASE_TAG: "v1.2.3",
+        RELEASE_SHA: sha,
+      }),
     ).toEqual({ release: "true", sha, version: "1.2.3" })
   })
   it("builds a release that Release Please creates for an older merged commit from that commit", async () => {
@@ -393,21 +472,35 @@ describe("release source resolution", () => {
       }),
     ).toEqual({ release: "true", sha: olderSha, version: "1.2.3" })
   })
-  it.each(["main", "v01.2.3", "1.2.3", "v1.2.3-rc.1", "v1.2.3\nsha=injected", "v1.2.3; echo x"])(
-    "rejects invalid, prerelease, or injected release tag %j",
-    async (tag) => {
-      await expect(
-        resolve({ RELEASE_CREATED: "true", RELEASE_TAG: tag, RELEASE_SHA: sha }),
-      ).rejects.toMatchObject({ code: 1 })
-    },
-  )
+  it.each([
+    "main",
+    "v01.2.3",
+    "1.2.3",
+    "v1.2.3-rc.1",
+    "v1.2.3\nsha=injected",
+    "v1.2.3; echo x",
+  ])("rejects invalid, prerelease, or injected release tag %j", async (tag) => {
+    await expect(
+      resolve({ RELEASE_CREATED: "true", RELEASE_TAG: tag, RELEASE_SHA: sha }),
+    ).rejects.toMatchObject({ code: 1 })
+  })
   it("refuses mismatched tags, missing GitHub releases, and source outside main history", async () => {
-    const created = { RELEASE_CREATED: "true", RELEASE_TAG: "v1.2.3", RELEASE_SHA: sha }
-    await expect(resolve({ ...created, TAG_SHA: olderSha })).rejects.toMatchObject({ code: 1 })
-    await expect(resolve({ ...created, MISSING_RELEASE: "true" })).rejects.toMatchObject({
+    const created = {
+      RELEASE_CREATED: "true",
+      RELEASE_TAG: "v1.2.3",
+      RELEASE_SHA: sha,
+    }
+    await expect(
+      resolve({ ...created, TAG_SHA: olderSha }),
+    ).rejects.toMatchObject({ code: 1 })
+    await expect(
+      resolve({ ...created, MISSING_RELEASE: "true" }),
+    ).rejects.toMatchObject({
       code: 1,
     })
-    await expect(resolve({ ...created, NOT_ON_MAIN: "true" })).rejects.toMatchObject({ code: 1 })
+    await expect(
+      resolve({ ...created, NOT_ON_MAIN: "true" }),
+    ).rejects.toMatchObject({ code: 1 })
   })
 })
 
@@ -434,15 +527,26 @@ esac
   )
 }
 
-async function writeImage(folder: string, name: string, imageDigest: string, tags: string[]) {
+async function writeImage(
+  folder: string,
+  name: string,
+  imageDigest: string,
+  tags: string[],
+) {
   await mkdir(join(folder, name), { recursive: true })
   await writeFile(join(folder, name, "digest"), `${imageDigest}\n`)
-  await writeFile(join(folder, name, "tags"), tags.map((tag) => `${tag}\n`).join(""))
+  await writeFile(
+    join(folder, name, "tags"),
+    tags.map((tag) => `${tag}\n`).join(""),
+  )
 }
 
 describe("smoke tests use the exact pushed digests", () => {
   const script = step(smoke, "Pull the exact pushed images").run!
-  async function pull(env: Record<string, string> = {}, imageDigest = digest("a")) {
+  async function pull(
+    env: Record<string, string> = {},
+    imageDigest = digest("a"),
+  ) {
     const folder = await temporaryFolder("smoke-test")
     await fakeDocker(folder)
     for (const target of ["init", "migrate", "web", "ingress"])
@@ -468,27 +572,35 @@ describe("smoke tests use the exact pushed digests", () => {
   }
   it("pulls each pushed digest for the native platform and names it only locally", async () => {
     const log = await pull()
-    expect(log).toContain("login cr.guneet.dev --username test-user --password-stdin")
+    expect(log).toContain(
+      "login cr.guneet.dev --username test-user --password-stdin",
+    )
     for (const target of ["init", "migrate", "web", "ingress"]) {
       const image = `cr.guneet.dev/dockyard/${target}@${digest("a")}`
       expect(log).toContain(`pull --platform linux/arm64 ${image}\n`)
-      expect(log).toContain(`tag ${image} localhost/dockyard-smoke/${target}:arm64\n`)
+      expect(log).toContain(
+        `tag ${image} localhost/dockyard-smoke/${target}:arm64\n`,
+      )
     }
     expect(log).not.toContain("test-secret")
     expect(log).not.toMatch(/^push /m)
   })
   it("refuses malformed digests and images for another platform", async () => {
     await expect(pull({}, "latest")).rejects.toMatchObject({ code: 1 })
-    await expect(pull({ INSPECT_PLATFORM: "linux/amd64" })).rejects.toMatchObject({ code: 1 })
+    await expect(
+      pull({ INSPECT_PLATFORM: "linux/amd64" }),
+    ).rejects.toMatchObject({ code: 1 })
   })
   it("starts the Compose stack without pulling Dockyard images", () => {
-    expect(step(smoke, "Configure Compose to use the pulled images").run).toContain(
-      "DOCKYARD_IMAGE_PREFIX=localhost/dockyard-smoke",
+    expect(
+      step(smoke, "Configure Compose to use the pulled images").run,
+    ).toContain("DOCKYARD_IMAGE_PREFIX=localhost/dockyard-smoke")
+    expect(
+      step(smoke, "Configure Compose to use the pulled images").run,
+    ).toContain("pull postgres registry")
+    expect(step(smoke, "Start the Compose stack").run).toContain(
+      "up --pull never --wait",
     )
-    expect(step(smoke, "Configure Compose to use the pulled images").run).toContain(
-      "pull postgres registry",
-    )
-    expect(step(smoke, "Start the Compose stack").run).toContain("up --pull never --wait")
     const names = smoke.steps!.map((step) => step.name)
     expect(names.indexOf("Start the Compose stack")).toBeLessThan(
       names.indexOf("Verify initialization and migration jobs"),
@@ -508,7 +620,12 @@ describe("smoke tests use the exact pushed digests", () => {
 describe("tags are created only from the tested digests", () => {
   const script = step(publisher, "Tag the tested multi-architecture image").run!
   const image = "cr.guneet.dev/dockyard/web"
-  const tags = [`${image}:v1.2.3`, `${image}:v1.2`, `${image}:v1`, `${image}:latest`]
+  const tags = [
+    `${image}:v1.2.3`,
+    `${image}:v1.2`,
+    `${image}:v1`,
+    `${image}:latest`,
+  ]
   async function tag(amd64Tags = tags, arm64Tags = tags) {
     const folder = await temporaryFolder("publish-test")
     await fakeDocker(folder)
@@ -540,10 +657,14 @@ describe("tags are created only from the tested digests", () => {
   })
   it("refuses differing tag plans, foreign repositories, and empty plans", async () => {
     await expect(tag(tags, tags.slice(1))).rejects.toMatchObject({ code: 1 })
-    await expect(tag([`${image}-other:v1.2.3`], [`${image}-other:v1.2.3`])).rejects.toMatchObject({
+    await expect(
+      tag([`${image}-other:v1.2.3`], [`${image}-other:v1.2.3`]),
+    ).rejects.toMatchObject({
       code: 1,
     })
-    await expect(tag([`${image}:bad tag`], [`${image}:bad tag`])).rejects.toMatchObject({ code: 1 })
+    await expect(
+      tag([`${image}:bad tag`], [`${image}:bad tag`]),
+    ).rejects.toMatchObject({ code: 1 })
     await expect(tag([], [])).rejects.toMatchObject({ code: 1 })
   })
 })

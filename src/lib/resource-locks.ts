@@ -1,16 +1,30 @@
 import { sql } from "drizzle-orm"
+
 import { db, type DatabaseExecutor } from "./db"
 import { HttpError } from "./http"
 import { repositoryIdentity, validProjectName } from "./image-names"
 import { validRepositoryName } from "./permissions"
 
-export async function lockImageNamespace(connection: DatabaseExecutor, name: string, write = true) {
-  if (!validRepositoryName(name)) throw new HttpError(400, "Invalid repository name.")
+export async function lockImageNamespace(
+  connection: DatabaseExecutor,
+  name: string,
+  write = true,
+) {
+  if (!validRepositoryName(name))
+    throw new HttpError(400, "Invalid repository name.")
   const project = repositoryIdentity(name).projectName
-  await lockNamespace(connection, project ? `project:${project}` : `image:${name}`, write)
+  await lockNamespace(
+    connection,
+    project ? `project:${project}` : `image:${name}`,
+    write,
+  )
 }
 
-async function lockNamespace(connection: DatabaseExecutor, name: string, write: boolean) {
+async function lockNamespace(
+  connection: DatabaseExecutor,
+  name: string,
+  write: boolean,
+) {
   // Database-wide transaction locks also coordinate multiple web replicas.
   await connection.execute(
     write

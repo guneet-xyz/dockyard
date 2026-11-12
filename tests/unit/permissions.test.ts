@@ -1,24 +1,61 @@
 import { describe, expect, it } from "vitest"
-import { allowedActions, canRead, canWrite, validRepositoryName } from "@/lib/permissions"
+
+import {
+  allowedActions,
+  canRead,
+  canWrite,
+  validRepositoryName,
+} from "@/lib/permissions"
 import type { Role } from "@/lib/types"
 
 describe("registry permissions", () => {
-  it.each<{ role: Role | null; visibility: "public" | "private"; expected: string[] }>([
+  it.each<{
+    role: Role | null
+    visibility: "public" | "private"
+    expected: string[]
+  }>([
     { role: null, visibility: "public", expected: ["pull"] },
     { role: null, visibility: "private", expected: [] },
     { role: "viewer", visibility: "public", expected: ["pull"] },
     { role: "viewer", visibility: "private", expected: ["pull"] },
-    { role: "maintainer", visibility: "public", expected: ["pull", "push", "delete"] },
-    { role: "maintainer", visibility: "private", expected: ["pull", "push", "delete"] },
-    { role: "admin", visibility: "public", expected: ["pull", "push", "delete"] },
-    { role: "admin", visibility: "private", expected: ["pull", "push", "delete"] },
-  ])("$role / $visibility receives only authorized actions", ({ role, visibility, expected }) => {
-    expect(allowedActions(role, visibility, ["pull", "push", "delete", "*", "unknown"])).toEqual(
-      expected,
-    )
-  })
+    {
+      role: "maintainer",
+      visibility: "public",
+      expected: ["pull", "push", "delete"],
+    },
+    {
+      role: "maintainer",
+      visibility: "private",
+      expected: ["pull", "push", "delete"],
+    },
+    {
+      role: "admin",
+      visibility: "public",
+      expected: ["pull", "push", "delete"],
+    },
+    {
+      role: "admin",
+      visibility: "private",
+      expected: ["pull", "push", "delete"],
+    },
+  ])(
+    "$role / $visibility receives only authorized actions",
+    ({ role, visibility, expected }) => {
+      expect(
+        allowedActions(role, visibility, [
+          "pull",
+          "push",
+          "delete",
+          "*",
+          "unknown",
+        ]),
+      ).toEqual(expected)
+    },
+  )
   it("intersects requested scopes, rather than granting extra permissions", () => {
-    expect(allowedActions("admin", "public", ["pull", "pull"])).toEqual(["pull"])
+    expect(allowedActions("admin", "public", ["pull", "pull"])).toEqual([
+      "pull",
+    ])
     expect(allowedActions("admin", "private", [])).toEqual([])
     expect(allowedActions("viewer", "private", ["push"])).toEqual([])
   })

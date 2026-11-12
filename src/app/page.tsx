@@ -1,5 +1,5 @@
 "use client"
-import Link from "next/link"
+
 import {
   ArrowRight,
   ArrowUpRight,
@@ -11,27 +11,32 @@ import {
   Tag,
   TrendingUp,
 } from "lucide-react"
-import { usePopular } from "@/hooks/use-popular"
-import { useSession } from "@/hooks/use-session"
+import Link from "next/link"
+
+import { PullCount } from "@/components/pull-count"
+import { RepositoryTable } from "@/components/repository-table"
+import { ResourceIcon } from "@/components/resource-icon"
+import { CommandBlock, ErrorState, TableSkeleton } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CommandBlock, ErrorState, TableSkeleton } from "@/components/shared"
-import { RepositoryTable } from "@/components/repository-table"
-import { PullCount } from "@/components/pull-count"
-import { ResourceIcon } from "@/components/resource-icon"
+import { usePopular } from "@/hooks/use-popular"
+import { useSession } from "@/hooks/use-session"
 import type { Repository } from "@/lib/types"
 
 function preferredTag(image: Repository) {
   if (image.tags.includes("latest")) return "latest"
-  return [...image.tags].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]
+  return [...image.tags].sort((a, b) =>
+    b.localeCompare(a, undefined, { numeric: true }),
+  )[0]
 }
 
 export default function ExplorePage() {
   const popular = usePopular()
   const { data: session } = useSession()
-  const host = popular.data?.registryHost ?? session?.registryHost ?? "localhost:3000"
+  const host =
+    popular.data?.registryHost ?? session?.registryHost ?? "localhost:3000"
   const guest = !session?.user
   const topImage = popular.data?.images[0]
   const stats = [
@@ -58,7 +63,7 @@ export default function ExplorePage() {
     <div className="page-enter space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-5">
         <div>
-          <p className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.16em] text-primary">
+          <p className="mb-2 flex items-center gap-2 text-[10px] font-medium tracking-[0.16em] text-primary uppercase">
             <span className="size-1 rounded-full bg-primary" />
             Discover public images
           </p>
@@ -90,8 +95,9 @@ export default function ExplorePage() {
             <Globe2 className="size-4" />
           </div>
           <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
-            <span className="font-medium text-foreground">Welcome aboard.</span> Public images can
-            be pulled without an account. Sign in to manage your projects and images.
+            <span className="font-medium text-foreground">Welcome aboard.</span>{" "}
+            Public images can be pulled without an account. Sign in to manage
+            your projects and images.
           </p>
           <Link
             href="/login"
@@ -107,13 +113,15 @@ export default function ExplorePage() {
           <Card key={label}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {label}
+                </p>
                 <Icon className={`size-4 ${color}`} />
               </div>
               {popular.isPending ? (
                 <Skeleton className="mt-5 h-8 w-16" />
               ) : (
-                <p className="mt-4 text-[30px] font-semibold leading-none tracking-tight">
+                <p className="mt-4 text-[30px] leading-none font-semibold tracking-tight">
                   {value === undefined ? "—" : value.toLocaleString("en-US")}
                 </p>
               )}
@@ -122,7 +130,10 @@ export default function ExplorePage() {
         ))}
       </div>
       {popular.isError ? (
-        <ErrorState message={popular.error.message} retry={() => popular.refetch()} />
+        <ErrorState
+          message={popular.error.message}
+          retry={() => popular.refetch()}
+        />
       ) : (
         <>
           <section aria-labelledby="popular-projects" className="space-y-4">
@@ -151,7 +162,11 @@ export default function ExplorePage() {
             ) : popular.data.projects.length ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {popular.data.projects.map((project, index) => (
-                  <Link key={project.name} href={`/projects/${project.name}`} className="group">
+                  <Link
+                    key={project.name}
+                    href={`/projects/${project.name}`}
+                    className="group"
+                  >
                     <Card className="h-full p-5 transition-colors hover:border-primary/40">
                       <div className="mb-5 flex items-center justify-between">
                         <ResourceIcon
@@ -160,7 +175,10 @@ export default function ExplorePage() {
                           logoUrl={project.logoUrl}
                           className="size-11 rounded-xl border-primary/20 bg-primary/5"
                         />
-                        <Badge variant="secondary" aria-label={`Rank ${index + 1}`}>
+                        <Badge
+                          variant="secondary"
+                          aria-label={`Rank ${index + 1}`}
+                        >
                           #{index + 1}
                         </Badge>
                       </div>
@@ -171,7 +189,8 @@ export default function ExplorePage() {
                         <ArrowUpRight className="size-4 text-muted-foreground group-hover:text-primary" />
                       </div>
                       <p className="mt-2 line-clamp-2 min-h-9 text-xs leading-relaxed text-muted-foreground">
-                        {project.description || `Images published under ${project.name}/…`}
+                        {project.description ||
+                          `Images published under ${project.name}/…`}
                       </p>
                       <div className="mt-5 flex flex-wrap items-center gap-4 border-t pt-4 text-xs text-muted-foreground">
                         <PullCount
@@ -180,11 +199,13 @@ export default function ExplorePage() {
                         />
                         <span className="flex items-center gap-1.5">
                           <Box className="size-3.5" />
-                          {project.imageCount} {project.imageCount === 1 ? "image" : "images"}
+                          {project.imageCount}{" "}
+                          {project.imageCount === 1 ? "image" : "images"}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <Tag className="size-3.5" />
-                          {project.tagCount} {project.tagCount === 1 ? "tag" : "tags"}
+                          {project.tagCount}{" "}
+                          {project.tagCount === 1 ? "tag" : "tags"}
                         </span>
                       </div>
                     </Card>
@@ -224,11 +245,14 @@ export default function ExplorePage() {
             </Card>
             <Card className="h-fit min-w-0">
               <CardHeader className="border-b">
-                <CardTitle className="text-sm">Pull without an account</CardTitle>
+                <CardTitle className="text-sm">
+                  Pull without an account
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 pt-5">
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  Public images support anonymous pulls straight from the registry.
+                  Public images support anonymous pulls straight from the
+                  registry.
                 </p>
                 {popular.isPending ? (
                   <Skeleton className="h-10" />

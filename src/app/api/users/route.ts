@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server"
-import { desc } from "drizzle-orm"
 import bcrypt from "bcryptjs"
+import { desc } from "drizzle-orm"
+import { NextResponse } from "next/server"
 import { z } from "zod"
+
 import { audit, requireUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { users } from "@/lib/db/schema"
@@ -24,7 +25,10 @@ export async function GET() {
       })
       .from(users)
       .orderBy(desc(users.createdAt))
-    return NextResponse.json({ users: result }, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json(
+      { users: result },
+      { headers: { "Cache-Control": "no-store" } },
+    )
   } catch (error) {
     return apiError(error)
   }
@@ -42,7 +46,10 @@ export async function POST(request: Request) {
           .toLowerCase()
           .min(3)
           .max(64)
-          .regex(/^[a-z0-9][a-z0-9._-]+$/, "Use letters, numbers, dots, dashes or underscores."),
+          .regex(
+            /^[a-z0-9][a-z0-9._-]+$/,
+            "Use letters, numbers, dots, dashes or underscores.",
+          ),
         name: z.string().trim().min(1).max(100),
         password: newPasswordSchema,
         role: z.enum(["admin", "maintainer", "viewer"]),
@@ -59,7 +66,9 @@ export async function POST(request: Request) {
       .onConflictDoNothing()
       .returning({ id: users.id })
     if (!user) throw new HttpError(409, "That username is already in use.")
-    await audit(actor.username, "user.create", input.username, { role: input.role })
+    await audit(actor.username, "user.create", input.username, {
+      role: input.role,
+    })
     return NextResponse.json(user, { status: 201 })
   } catch (error) {
     return apiError(error)

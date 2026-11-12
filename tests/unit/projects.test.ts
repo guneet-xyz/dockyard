@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+
 import {
   effectiveVisibility,
   imageHref,
@@ -34,9 +35,13 @@ function image(name: string, tags = 1): Repository {
 }
 
 describe("project and image names", () => {
-  it.each(["dockyard/init", "my-project/my-image", "team/api.v1", "team/foo__bar"])(
-    "accepts exactly project/image: %s",
-    (name) => expect(validImageRepository(name)).toBe(true),
+  it.each([
+    "dockyard/init",
+    "my-project/my-image",
+    "team/api.v1",
+    "team/foo__bar",
+  ])("accepts exactly project/image: %s", (name) =>
+    expect(validImageRepository(name)).toBe(true),
   )
   it.each([
     "alpine",
@@ -89,7 +94,11 @@ describe("project visibility", () => {
       },
     ]
     expect(
-      summarizeProjects(rows, [image("deleted/api"), image("deleted/legacy/deep")], user),
+      summarizeProjects(
+        rows,
+        [image("deleted/api"), image("deleted/legacy/deep")],
+        user,
+      ),
     ).toEqual([])
     expect(summarizeProjects(rows, [image("deleted/api")], null)).toEqual([])
   })
@@ -132,11 +141,20 @@ describe("project visibility", () => {
   it("groups only the visible image collection and retains empty configured projects", () => {
     vi.stubEnv("DEFAULT_REPOSITORY_VISIBILITY", "public")
     const grouped = summarizeProjects(
-      [{ name: "empty", description: "Reserved", visibility: "public", updatedAt: new Date(0) }],
+      [
+        {
+          name: "empty",
+          description: "Reserved",
+          visibility: "public",
+          updatedAt: new Date(0),
+        },
+      ],
       [image("dockyard/init", 2), image("dockyard/web", 3), image("alpine")],
       null,
     )
-    expect(grouped.find((project) => project.name === "dockyard")).toMatchObject({
+    expect(
+      grouped.find((project) => project.name === "dockyard"),
+    ).toMatchObject({
       imageCount: 2,
       tagCount: 5,
     })

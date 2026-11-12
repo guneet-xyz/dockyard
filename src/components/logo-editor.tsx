@@ -1,13 +1,15 @@
 "use client"
-import { useEffect, useRef, useState } from "react"
-import Image from "next/image"
-import { ImagePlus, Loader2, Trash2 } from "lucide-react"
+
 import { useQueryClient } from "@tanstack/react-query"
+import { ImagePlus, Loader2, Trash2 } from "lucide-react"
+import Image from "next/image"
+import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+
 import { MAX_LOGO_BYTES, type LogoKind } from "@/lib/logo-constants"
+
+import { ResourceIcon } from "./resource-icon"
 import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
 import {
   Dialog,
   DialogContent,
@@ -17,7 +19,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog"
-import { ResourceIcon } from "./resource-icon"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
 
 export function LogoEditor({
   kind,
@@ -60,13 +63,25 @@ export function LogoEditor({
       const url = `/api/logos?${new URLSearchParams({ kind, name })}`
       const response = await fetch(url, {
         method: remove ? "DELETE" : "POST",
-        ...(remove ? {} : { headers: { "Content-Type": "application/octet-stream" }, body: file }),
+        ...(remove
+          ? {}
+          : {
+              headers: { "Content-Type": "application/octet-stream" },
+              body: file,
+            }),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error ?? "Could not update the photo/logo.")
+      if (!response.ok)
+        throw new Error(result.error ?? "Could not update the photo/logo.")
       setOpen(false)
       chooseFile(null)
-      for (const key of ["repository", "repositories", "project", "projects", "activity"])
+      for (const key of [
+        "repository",
+        "repositories",
+        "project",
+        "projects",
+        "activity",
+      ])
         void client.invalidateQueries({ queryKey: [key] })
       toast.success(
         `${kind === "project" ? "Project" : "Image"} logo ${remove ? "removed" : "saved"}.`,
@@ -96,10 +111,12 @@ export function LogoEditor({
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] grid-cols-[minmax(0,1fr)] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{kind === "project" ? "Project" : "Image"} photo/logo</DialogTitle>
+          <DialogTitle>
+            {kind === "project" ? "Project" : "Image"} photo/logo
+          </DialogTitle>
           <DialogDescription className="break-all">
-            Choose a picture for {name}. This is a photo/logo, not a container archive. Container
-            tags and visibility are unchanged.
+            Choose a picture for {name}. This is a photo/logo, not a container
+            archive. Container tags and visibility are unchanged.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -144,14 +161,15 @@ export function LogoEditor({
               }}
             />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              PNG, JPEG, or WebP · up to 5 MiB · static images only. Stored as a metadata-free WebP
-              up to 512 × 512 pixels, preserving aspect ratio.
+              PNG, JPEG, or WebP · up to 5 MiB · static images only. Stored as a
+              metadata-free WebP up to 512 × 512 pixels, preserving aspect
+              ratio.
             </p>
           </div>
           {error && (
             <p
               role="alert"
-              className="break-words rounded-md border border-red-400/20 bg-red-400/5 p-3 text-xs text-red-400"
+              className="rounded-md border border-red-400/20 bg-red-400/5 p-3 text-xs break-words text-red-400"
             >
               {error}
             </p>
@@ -180,7 +198,8 @@ export function LogoEditor({
               Cancel
             </Button>
             <Button type="submit" disabled={pending || !file}>
-              {pending ? <Loader2 className="animate-spin" /> : <ImagePlus />}Save photo/logo
+              {pending ? <Loader2 className="animate-spin" /> : <ImagePlus />}
+              Save photo/logo
             </Button>
           </DialogFooter>
         </form>

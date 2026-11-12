@@ -1,5 +1,7 @@
 "use client"
+
 import { useParams } from "next/navigation"
+
 import ImageDetail from "@/components/image-detail"
 
 export default function ProjectImagePage() {

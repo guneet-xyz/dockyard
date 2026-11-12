@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
+
 import { currentUser, requireUser } from "@/lib/auth"
 import { apiError, assertSameOrigin, HttpError } from "@/lib/http"
-import { canWrite, validRepositoryName } from "@/lib/permissions"
 import { validProjectName } from "@/lib/image-names"
 import { MAX_LOGO_BYTES } from "@/lib/logo-constants"
 import { changeLogo, normalizeLogo, readLogo } from "@/lib/logos"
+import { canWrite, validRepositoryName } from "@/lib/permissions"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,7 +17,9 @@ function target(request: Request) {
     .object({ kind: z.enum(["project", "image"]), name: z.string() })
     .parse({ kind: query.get("kind"), name: query.get("name") })
   if (
-    !(result.kind === "project" ? validProjectName(result.name) : validRepositoryName(result.name))
+    !(result.kind === "project"
+      ? validProjectName(result.name)
+      : validRepositoryName(result.name))
   )
     throw new HttpError(400, "Invalid resource name.")
   return result
@@ -46,12 +49,17 @@ export async function POST(request: Request) {
   try {
     assertSameOrigin(request)
     const user = await requireUser()
-    if (!canWrite(user)) throw new HttpError(403, "Maintainer or administrator access is required.")
+    if (!canWrite(user))
+      throw new HttpError(
+        403,
+        "Maintainer or administrator access is required.",
+      )
     const { kind, name } = target(request)
     const length = request.headers.get("content-length")
     if (length && (!/^\d+$/.test(length) || Number(length) > MAX_LOGO_BYTES))
       throw new HttpError(413, "Choose a photo/logo no larger than 5 MiB.")
-    if (!request.body) throw new HttpError(400, "Choose a photo/logo to upload.")
+    if (!request.body)
+      throw new HttpError(400, "Choose a photo/logo to upload.")
     const chunks: Buffer[] = []
     let size = 0
     const reader = request.body.getReader()
@@ -70,7 +78,12 @@ export async function POST(request: Request) {
       reader.releaseLock()
     }
     return NextResponse.json(
-      await changeLogo(kind, name, await requireUser(), await normalizeLogo(Buffer.concat(chunks))),
+      await changeLogo(
+        kind,
+        name,
+        await requireUser(),
+        await normalizeLogo(Buffer.concat(chunks)),
+      ),
       { headers: { "Cache-Control": "no-store" } },
     )
   } catch (error) {

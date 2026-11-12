@@ -1,4 +1,5 @@
 import { Download } from "lucide-react"
+
 import { cn } from "@/lib/utils"
 
 export const PULL_COUNT_DESCRIPTION =
@@ -15,7 +16,10 @@ export function PullCount({
 }) {
   return (
     <span
-      className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", className)}
+      className={cn(
+        "inline-flex items-center gap-1.5 text-xs text-muted-foreground",
+        className,
+      )}
       title={PULL_COUNT_DESCRIPTION}
       aria-label={label}
     >

@@ -1,17 +1,17 @@
 "use client"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ArrowRight, Loader2, Plus } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { toast } from "sonner"
+
 import { api } from "@/lib/api-client"
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import { imageHref } from "@/lib/image-names"
 import type { Visibility } from "@/lib/types"
+
 import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
-import { Textarea } from "./ui/textarea"
-import { MAX_DESCRIPTION_LENGTH } from "@/lib/description"
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "./ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Input } from "./ui/input"
+import { Label } from "./ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select"
+import { Textarea } from "./ui/textarea"
 
 export function NewRepositoryDialog({
   defaultVisibility = "public",
@@ -72,7 +81,8 @@ export function NewRepositoryDialog({
         <DialogHeader>
           <DialogTitle>Create an image</DialogTitle>
           <DialogDescription>
-            Reserve a name and set its visibility before pushing your first image.
+            Reserve a name and set its visibility before pushing your first
+            image.
           </DialogDescription>
         </DialogHeader>
         <form
@@ -83,7 +93,9 @@ export function NewRepositoryDialog({
           className="space-y-5"
         >
           <div className="space-y-2">
-            <Label htmlFor="repository-name">{projectName ? "Image name" : "Image path"}</Label>
+            <Label htmlFor="repository-name">
+              {projectName ? "Image name" : "Image path"}
+            </Label>
             <Input
               id="repository-name"
               placeholder={projectName ? "init" : "dockyard/init"}
@@ -100,7 +112,8 @@ export function NewRepositoryDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="repository-description">
-              Description <span className="text-muted-foreground">(optional)</span>
+              Description{" "}
+              <span className="text-muted-foreground">(optional)</span>
             </Label>
             <Textarea
               id="repository-description"
@@ -121,18 +134,30 @@ export function NewRepositoryDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="public">Public — anyone can browse and pull</SelectItem>
-                <SelectItem value="private">Private — signed-in users only</SelectItem>
+                <SelectItem value="public">
+                  Public — anyone can browse and pull
+                </SelectItem>
+                <SelectItem value="private">
+                  Private — signed-in users only
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={mutation.isPending || !name}>
-              {mutation.isPending ? <Loader2 className="animate-spin" /> : <ArrowRight />}Create
-              image
+              {mutation.isPending ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <ArrowRight />
+              )}
+              Create image
             </Button>
           </DialogFooter>
         </form>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+
 import { cn, formatBytes, timeAgo } from "@/lib/utils"
 
 describe("presentation utilities", () => {
@@ -8,7 +9,8 @@ describe("presentation utilities", () => {
     expect(formatBytes(1024)).toBe("1.0 KB")
     expect(formatBytes(1024 ** 3)).toBe("1.0 GB")
   })
-  it("merges conflicting Tailwind classes", () => expect(cn("p-2", "p-5", false)).toBe("p-5"))
+  it("merges conflicting Tailwind classes", () =>
+    expect(cn("p-2", "p-5", false)).toBe("p-5"))
   it("handles missing or recent dates", () => {
     expect(timeAgo(null)).toBe("—")
     expect(timeAgo(new Date())).toBe("Just now")

@@ -1,4 +1,5 @@
 import { z } from "zod"
+
 import { MAX_DESCRIPTION_LENGTH } from "./description"
 
 export const resourceSettingsSchema = z
@@ -8,6 +9,7 @@ export const resourceSettingsSchema = z
   })
   .strict()
   .refine(
-    (value) => value.description !== undefined || value.visibility !== undefined,
+    (value) =>
+      value.description !== undefined || value.visibility !== undefined,
     "Provide a description or visibility change.",
   )

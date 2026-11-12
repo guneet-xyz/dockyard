@@ -1,15 +1,16 @@
 import { eq } from "drizzle-orm"
+
+import { config } from "./config"
 import { db, type DatabaseExecutor } from "./db"
 import { projects, repositories } from "./db/schema"
-import { config } from "./config"
 import { HttpError } from "./http"
-import { canRead, validRepositoryName } from "./permissions"
-import { signRegistryToken } from "./registry-token"
 import { effectiveVisibility, repositoryIdentity } from "./image-names"
-import type { ImageTag, Repository, SessionUser } from "./types"
-import { INTERNAL_REGISTRY_USER_AGENT } from "./registry-events"
-import { repositoryPullTotals } from "./pull-counts"
 import { logoReferences } from "./logo-references"
+import { canRead, validRepositoryName } from "./permissions"
+import { repositoryPullTotals } from "./pull-counts"
+import { INTERNAL_REGISTRY_USER_AGENT } from "./registry-events"
+import { signRegistryToken } from "./registry-token"
+import type { ImageTag, Repository, SessionUser } from "./types"
 
 const acceptedManifests = [
   "application/vnd.oci.image.index.v1+json",
@@ -31,13 +32,24 @@ type Manifest = {
 }
 
 export function repositoryPath(name: string) {
-  if (!validRepositoryName(name)) throw new HttpError(400, "Invalid repository name.")
+  if (!validRepositoryName(name))
+    throw new HttpError(400, "Invalid repository name.")
   return name.split("/").map(encodeURIComponent).join("/")
 }
 
-export async function registryRequest(path: string, name?: string, method = "GET") {
+export async function registryRequest(
+  path: string,
+  name?: string,
+  method = "GET",
+) {
   const access = name
-    ? [{ type: "repository", name, actions: ["pull", ...(method === "DELETE" ? ["delete"] : [])] }]
+    ? [
+        {
+          type: "repository",
+          name,
+          actions: ["pull", ...(method === "DELETE" ? ["delete"] : [])],
+        },
+      ]
     : [{ type: "registry", name: "catalog", actions: ["*"] }]
   const token = await signRegistryToken("dockyard-service", access)
   let response: Response
@@ -59,10 +71,14 @@ export async function registryRequest(path: string, name?: string, method = "GET
       "The registry is unavailable. Check that the registry service is running.",
     )
   }
-  if (response.status === 404) throw new HttpError(404, "Repository or image not found.")
+  if (response.status === 404)
+    throw new HttpError(404, "Repository or image not found.")
   if (!response.ok) {
     console.error("Registry error", response.status, path)
-    throw new HttpError(502, "The registry rejected the request. Check the registry configuration.")
+    throw new HttpError(
+      502,
+      "The registry rejected the request. Check the registry configuration.",
+    )
   }
   return response
 }
@@ -85,13 +101,17 @@ async function paginatedList(
     values.push(...entries)
     if (entries.length < 1000) return values
     const next = entries.at(-1)
-    if (!next || next === last) throw new HttpError(502, "Invalid registry pagination.")
+    if (!next || next === last)
+      throw new HttpError(502, "Invalid registry pagination.")
     last = next
   }
   throw new HttpError(502, "Registry listing exceeded the page limit.")
 }
 
-export async function repositoryMetadata(name: string, connection: DatabaseExecutor = db()) {
+export async function repositoryMetadata(
+  name: string,
+  connection: DatabaseExecutor = db(),
+) {
   repositoryPath(name)
   const identity = repositoryIdentity(name)
   const [metadata, project] = await Promise.all([
@@ -148,9 +168,16 @@ export async function readableRepository(
   return metadata
 }
 
-export async function listTags(name: string, connection: DatabaseExecutor = db()) {
+export async function listTags(
+  name: string,
+  connection: DatabaseExecutor = db(),
+) {
   try {
-    return await paginatedList(`/v2/${repositoryPath(name)}/tags/list`, "tags", name)
+    return await paginatedList(
+      `/v2/${repositoryPath(name)}/tags/list`,
+      "tags",
+      name,
+    )
   } catch (error) {
     if (error instanceof HttpError && error.status === 404) {
       const [reserved] = await connection
@@ -178,12 +205,17 @@ export async function listRepositories(
     logoReferences(connection),
   ])
   const byName = new Map(metadata.map((repo) => [repo.name, repo]))
-  const byProject = new Map(projectRows.map((project) => [project.name, project]))
+  const byProject = new Map(
+    projectRows.map((project) => [project.name, project]),
+  )
   const visible = [...new Set([...names, ...metadata.map((repo) => repo.name)])]
     .sort()
     .filter((name) => {
       // Project operations must not enumerate tags in unrelated namespaces.
-      if (projectName !== undefined && repositoryIdentity(name).projectName !== projectName)
+      if (
+        projectName !== undefined &&
+        repositoryIdentity(name).projectName !== projectName
+      )
         return false
       const meta = byName.get(name)
       const project = byProject.get(repositoryIdentity(name).projectName ?? "")
@@ -193,7 +225,8 @@ export async function listRepositories(
           user,
           effectiveVisibility(
             byName.get(name)?.visibility,
-            byProject.get(repositoryIdentity(name).projectName ?? "")?.visibility,
+            byProject.get(repositoryIdentity(name).projectName ?? "")
+              ?.visibility,
             config.defaultVisibility,
           ),
         )
@@ -231,12 +264,25 @@ export async function listRepositories(
   return results
 }
 
-export async function imageTag(name: string, tag: string, pullCount = 0): Promise<ImageTag> {
+export async function imageTag(
+  name: string,
+  tag: string,
+  pullCount = 0,
+): Promise<ImageTag> {
   const path = repositoryPath(name)
-  const response = await registryRequest(`/v2/${path}/manifests/${encodeURIComponent(tag)}`, name)
+  const response = await registryRequest(
+    `/v2/${path}/manifests/${encodeURIComponent(tag)}`,
+    name,
+  )
   const manifest: Manifest = await response.json()
   const digest = response.headers.get("Docker-Content-Digest") ?? ""
-  const base = { name: tag, digest, created: null, mediaType: manifest.mediaType, pullCount }
+  const base = {
+    name: tag,
+    digest,
+    created: null,
+    mediaType: manifest.mediaType,
+    pullCount,
+  }
   if (manifest.manifests) {
     // Descriptor sizes are manifest sizes, not image sizes; inspect child manifests.
     let size = 0
@@ -244,10 +290,14 @@ export async function imageTag(name: string, tag: string, pullCount = 0): Promis
     for (const descriptor of manifest.manifests) {
       if (descriptor.platform?.os === "unknown") continue // OCI attestation, not an image.
       const child: Manifest = await (
-        await registryRequest(`/v2/${path}/manifests/${descriptor.digest}`, name)
+        await registryRequest(
+          `/v2/${path}/manifests/${descriptor.digest}`,
+          name,
+        )
       ).json()
       size +=
-        (child.layers ?? []).reduce((sum, layer) => sum + layer.size, 0) + (child.config?.size ?? 0)
+        (child.layers ?? []).reduce((sum, layer) => sum + layer.size, 0) +
+        (child.config?.size ?? 0)
       const platform = descriptor.platform
       if (platform)
         platforms.push(
@@ -275,6 +325,11 @@ export async function imageTag(name: string, tag: string, pullCount = 0): Promis
 }
 
 export async function deleteManifest(name: string, digest: string) {
-  if (!/^sha256:[a-f0-9]{64}$/.test(digest)) throw new HttpError(400, "Invalid manifest digest.")
-  await registryRequest(`/v2/${repositoryPath(name)}/manifests/${digest}`, name, "DELETE")
+  if (!/^sha256:[a-f0-9]{64}$/.test(digest))
+    throw new HttpError(400, "Invalid manifest digest.")
+  await registryRequest(
+    `/v2/${repositoryPath(name)}/manifests/${digest}`,
+    name,
+    "DELETE",
+  )
 }

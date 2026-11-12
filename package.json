@@ -3,22 +3,21 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
-    "start": "node scripts/start.mjs",
-    "lint": "eslint .",
-    "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run",
-    "test:integration": "tsx scripts/smoke-test.ts",
-    "test:e2e": "playwright test",
-    "env:generate": "sh deploy/generate-env.sh",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "dev": "next dev --hostname 0.0.0.0",
+    "env:generate": "sh deploy/generate-env.sh",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint .",
+    "start": "node scripts/start.mjs",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:integration": "tsx scripts/smoke-test.ts",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",
@@ -48,6 +47,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.19.15",
@@ -57,11 +57,14 @@
     "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.8",
-    "prettier": "^3.8.3",
+    "prettier": "^3.10.1",
+    "prettier-plugin-packagejson": "^3.1.0",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "yaml": "^2.9.1"
-  }
+  },
+  "packageManager": "pnpm@10.32.1"
 }

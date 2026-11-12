@@ -1,7 +1,10 @@
+import { and, eq } from "drizzle-orm"
+
+import { config } from "./config"
 import { db, type DatabaseExecutor } from "./db"
 import { auditEvents, projects, repositories, resourceLogos } from "./db/schema"
-import { and, eq } from "drizzle-orm"
 import { HttpError } from "./http"
+import { canWrite } from "./permissions"
 import { projectMetadata } from "./projects"
 import {
   deleteManifest,
@@ -14,8 +17,6 @@ import {
 } from "./registry"
 import { withImageResource, withProjectResource } from "./resource-locks"
 import type { SessionUser } from "./types"
-import { config } from "./config"
-import { canWrite } from "./permissions"
 
 export async function deleteTaggedManifests(
   name: string,
@@ -42,7 +43,10 @@ export async function deleteTaggedManifests(
           )
           const digest = response.headers.get("Docker-Content-Digest")
           if (!digest || !/^sha256:[a-f0-9]{64}$/.test(digest))
-            throw new HttpError(502, "The registry returned an invalid manifest digest.")
+            throw new HttpError(
+              502,
+              "The registry returned an invalid manifest digest.",
+            )
           return digest
         } catch (error) {
           if (error instanceof HttpError && error.status === 404) return null
@@ -62,13 +66,20 @@ export async function deleteTaggedManifests(
   }
   try {
     if ((await listTags(name, connection)).length)
-      throw new HttpError(409, "New tags appeared during deletion. Pause pushes and retry.")
+      throw new HttpError(
+        409,
+        "New tags appeared during deletion. Pause pushes and retry.",
+      )
   } catch (error) {
     if (!(error instanceof HttpError && error.status === 404)) throw error
   }
 }
 
-async function retireImage(connection: DatabaseExecutor, name: string, deletedAt: Date) {
+async function retireImage(
+  connection: DatabaseExecutor,
+  name: string,
+  deletedAt: Date,
+) {
   const meta = await repositoryMetadata(name, connection)
   await connection
     .insert(repositories)
@@ -79,7 +90,10 @@ async function retireImage(connection: DatabaseExecutor, name: string, deletedAt
       deletedAt,
       updatedAt: deletedAt,
     })
-    .onConflictDoUpdate({ target: repositories.name, set: { deletedAt, updatedAt: deletedAt } })
+    .onConflictDoUpdate({
+      target: repositories.name,
+      set: { deletedAt, updatedAt: deletedAt },
+    })
   await connection
     .delete(resourceLogos)
     .where(and(eq(resourceLogos.kind, "image"), eq(resourceLogos.name, name)))
@@ -133,7 +147,13 @@ export async function deleteImageRepository(name: string, actor: SessionUser) {
       return { ok: true, deletedManifests }
     })
   } catch (error) {
-    return reportPartialFailure(actor, "repository.delete", name, deletedManifests, error)
+    return reportPartialFailure(
+      actor,
+      "repository.delete",
+      name,
+      deletedManifests,
+      error,
+    )
   }
 }
 
@@ -145,14 +165,19 @@ export async function deleteProject(name: string, actor: SessionUser) {
     return await withProjectResource(name, async (tx) => {
       const metadata = await projectMetadata(name, tx)
       const images = await listRepositories(actor, tx, true, name)
-      if (!metadata && !images.length) throw new HttpError(404, "Project not found.")
+      if (!metadata && !images.length)
+        throw new HttpError(404, "Project not found.")
       for (const image of images)
         await deleteTaggedManifests(image.name, tx, () => deletedManifests++)
       const remaining = await listRepositories(actor, tx, true, name)
       if (remaining.some((image) => image.tagCount))
-        throw new HttpError(409, "New tags appeared during deletion. Pause pushes and retry.")
+        throw new HttpError(
+          409,
+          "New tags appeared during deletion. Pause pushes and retry.",
+        )
       const deletedAt = new Date()
-      for (const image of remaining) await retireImage(tx, image.name, deletedAt)
+      for (const image of remaining)
+        await retireImage(tx, image.name, deletedAt)
       await tx
         .insert(projects)
         .values({
@@ -162,10 +187,15 @@ export async function deleteProject(name: string, actor: SessionUser) {
           deletedAt,
           updatedAt: deletedAt,
         })
-        .onConflictDoUpdate({ target: projects.name, set: { deletedAt, updatedAt: deletedAt } })
+        .onConflictDoUpdate({
+          target: projects.name,
+          set: { deletedAt, updatedAt: deletedAt },
+        })
       await tx
         .delete(resourceLogos)
-        .where(and(eq(resourceLogos.kind, "project"), eq(resourceLogos.name, name)))
+        .where(
+          and(eq(resourceLogos.kind, "project"), eq(resourceLogos.name, name)),
+        )
       await tx.insert(auditEvents).values({
         actor: actor.username,
         action: "project.delete",
@@ -175,6 +205,12 @@ export async function deleteProject(name: string, actor: SessionUser) {
       return { ok: true, deletedImages: remaining.length, deletedManifests }
     })
   } catch (error) {
-    return reportPartialFailure(actor, "project.delete", name, deletedManifests, error)
+    return reportPartialFailure(
+      actor,
+      "project.delete",
+      name,
+      deletedManifests,
+      error,
+    )
   }
 }

@@ -1,7 +1,16 @@
 "use client"
+
+import {
+  ArrowUpRight,
+  BookOpen,
+  Check,
+  Globe2,
+  Info,
+  ShieldCheck,
+  Terminal,
+} from "lucide-react"
 import Link from "next/link"
-import { ArrowUpRight, BookOpen, Check, Globe2, Info, ShieldCheck, Terminal } from "lucide-react"
-import { useSession } from "@/hooks/use-session"
+
 import { CommandBlock } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useSession } from "@/hooks/use-session"
 
 export default function GuidePage() {
   const { data } = useSession()
@@ -33,12 +43,14 @@ export default function GuidePage() {
     },
     {
       title: "Give it a registry address",
-      description: "Tag your local image with your registry hostname and repository name.",
+      description:
+        "Tag your local image with your registry hostname and repository name.",
       command: `docker tag my-app:latest ${host}/my-project/my-app:latest`,
     },
     {
       title: "Push it to Dockyard",
-      description: "Your image and tags will appear in the repository browser automatically.",
+      description:
+        "Your image and tags will appear in the repository browser automatically.",
       command: `docker push ${host}/my-project/my-app:latest`,
     },
   ]
@@ -49,7 +61,9 @@ export default function GuidePage() {
           <Terminal className="size-3" />
           Quick start
         </Badge>
-        <h1 className="text-2xl font-semibold tracking-tight">A small guide to shipping.</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          A small guide to shipping.
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Your Docker CLI already knows the way. Here’s how to get connected.
         </p>
@@ -58,13 +72,15 @@ export default function GuidePage() {
         <div className="flex gap-3">
           <Info className="mt-0.5 size-4 shrink-0 text-amber-300" />
           <div>
-            <h2 className="text-xs font-medium text-amber-200">Local HTTP vs. production HTTPS</h2>
+            <h2 className="text-xs font-medium text-amber-200">
+              Local HTTP vs. production HTTPS
+            </h2>
             <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-              The default Compose setup uses HTTP on localhost for development. For a remote HTTP
-              registry, Docker must trust it via the{" "}
-              <code className="text-slate-300">insecure-registries</code> setting. In production,
-              terminate TLS for both the UI and registry using a reverse proxy. Never send passwords
-              over untrusted HTTP.
+              The default Compose setup uses HTTP on localhost for development.
+              For a remote HTTP registry, Docker must trust it via the{" "}
+              <code className="text-slate-300">insecure-registries</code>{" "}
+              setting. In production, terminate TLS for both the UI and registry
+              using a reverse proxy. Never send passwords over untrusted HTTP.
             </p>
           </div>
         </div>
@@ -78,7 +94,7 @@ export default function GuidePage() {
               </span>
               <div className="min-w-0 flex-1">
                 <h2 className="text-sm font-medium">{step.title}</h2>
-                <p className="mb-4 mt-2 text-xs leading-relaxed text-muted-foreground">
+                <p className="mt-2 mb-4 text-xs leading-relaxed text-muted-foreground">
                   {step.description}
                 </p>
                 <CommandBlock command={step.command} />
@@ -98,7 +114,9 @@ export default function GuidePage() {
           <p className="mb-4 text-sm text-muted-foreground">
             No account needed. Guests can browse and pull any public repository.
           </p>
-          <CommandBlock command={`docker pull ${host}/my-project/my-app:latest`} />
+          <CommandBlock
+            command={`docker pull ${host}/my-project/my-app:latest`}
+          />
           <p className="mt-3 text-xs text-muted-foreground">
             For a private image, run <code>docker login</code> first.
           </p>
@@ -111,8 +129,8 @@ export default function GuidePage() {
             Permissions, at a glance
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            The same roles apply in the browser and Docker CLI. All active signed-in users can read
-            private repositories.
+            The same roles apply in the browser and Docker CLI. All active
+            signed-in users can read private repositories.
           </p>
         </CardHeader>
         <Table>
@@ -127,14 +145,31 @@ export default function GuidePage() {
           </TableHeader>
           <TableBody>
             {[
-              { label: "Browse & pull public images", values: [true, true, true, true] },
-              { label: "Browse & pull private images", values: [false, true, true, true] },
-              { label: "Push & delete images", values: [false, false, true, true] },
-              { label: "Configure repositories", values: [false, false, true, true] },
-              { label: "Manage users & view audit history", values: [false, false, false, true] },
+              {
+                label: "Browse & pull public images",
+                values: [true, true, true, true],
+              },
+              {
+                label: "Browse & pull private images",
+                values: [false, true, true, true],
+              },
+              {
+                label: "Push & delete images",
+                values: [false, false, true, true],
+              },
+              {
+                label: "Configure repositories",
+                values: [false, false, true, true],
+              },
+              {
+                label: "Manage users & view audit history",
+                values: [false, false, false, true],
+              },
             ].map((row) => (
               <TableRow key={row.label}>
-                <TableCell className="whitespace-nowrap text-xs">{row.label}</TableCell>
+                <TableCell className="text-xs whitespace-nowrap">
+                  {row.label}
+                </TableCell>
                 {row.values.map((value, i) => (
                   <TableCell key={i}>
                     {value ? (
@@ -143,7 +178,10 @@ export default function GuidePage() {
                         <span className="sr-only">Allowed</span>
                       </>
                     ) : (
-                      <span className="text-muted-foreground/40" aria-label="Not allowed">
+                      <span
+                        className="text-muted-foreground/40"
+                        aria-label="Not allowed"
+                      >
                         —
                       </span>
                     )}
@@ -154,15 +192,20 @@ export default function GuidePage() {
           </TableBody>
         </Table>
         <div className="border-t p-5 text-xs leading-relaxed text-muted-foreground">
-          New repositories are public unless configured otherwise. To push a private image safely,
-          create a private repository in the UI{" "}
-          <strong className="font-medium text-foreground">before</strong> the first push.
-          Administrators can also change the default in their deployment environment.
+          New repositories are public unless configured otherwise. To push a
+          private image safely, create a private repository in the UI{" "}
+          <strong className="font-medium text-foreground">before</strong> the
+          first push. Administrators can also change the default in their
+          deployment environment.
         </div>
       </Card>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Button asChild variant="outline">
-          <a href="https://distribution.github.io/distribution/" target="_blank" rel="noreferrer">
+          <a
+            href="https://distribution.github.io/distribution/"
+            target="_blank"
+            rel="noreferrer"
+          >
             <BookOpen />
             Distribution documentation
             <ArrowUpRight />
