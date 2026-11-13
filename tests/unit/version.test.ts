@@ -9,7 +9,7 @@ import {
   resetUpdateCheck,
   UPDATE_CHECK_RETRY_MS,
   UPDATE_CHECK_TTL_MS,
-  versionInfo,
+  updateStatus,
 } from "@/lib/version"
 
 import packageJson from "../../package.json"
@@ -22,6 +22,7 @@ let fetchMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   resetUpdateCheck()
+  vi.stubEnv("UPDATE_CHECK", "")
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(new Date("2026-11-13T00:00:00Z"))
   fetchMock = vi.fn()
@@ -85,12 +86,23 @@ describe("latest release lookup", () => {
   it("treats failures as unknown and retries after the retry interval", async () => {
     fetchMock.mockResolvedValueOnce(release(undefined, 403))
     await expect(latestRelease()).resolves.toBeNull()
-    fetchMock.mockRejectedValueOnce(new Error("offline"))
     await expect(latestRelease()).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(1)
     vi.setSystemTime(Date.now() + UPDATE_CHECK_RETRY_MS + 1)
+    fetchMock.mockRejectedValueOnce(new Error("offline"))
     await expect(latestRelease()).resolves.toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(console.warn).toHaveBeenLastCalledWith(
+      "Update check failed: offline",
+    )
+  })
+
+  it("trims surrounding whitespace from tags", async () => {
+    fetchMock.mockResolvedValue(release(" v1.2.3 "))
+    await expect(latestRelease()).resolves.toEqual({
+      version: "1.2.3",
+      url: "https://github.com/guneet-xyz/dockyard/releases/tag/v1.2.3",
+    })
   })
 
   it("rejects unexpected tags", async () => {
@@ -104,36 +116,41 @@ describe("latest release lookup", () => {
     vi.setSystemTime(Date.now() + UPDATE_CHECK_TTL_MS + 1)
     fetchMock.mockRejectedValueOnce(new Error("offline"))
     await expect(latestRelease()).resolves.toMatchObject({ version: "9.8.7" })
+    vi.setSystemTime(Date.now() + UPDATE_CHECK_RETRY_MS + 1)
+    fetchMock.mockResolvedValueOnce(release("v9.9.0"))
+    await expect(latestRelease()).resolves.toMatchObject({ version: "9.9.0" })
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 })
 
-describe("version information by audience", () => {
-  it("shows only the running version to non-administrators without contacting GitHub", async () => {
-    await expect(versionInfo(false)).resolves.toEqual({
-      current: currentVersion,
-      update: null,
-    })
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
+describe("update status", () => {
   it("tells administrators when a newer release exists", async () => {
     fetchMock.mockResolvedValue(release("v999.0.0"))
-    await expect(versionInfo(true)).resolves.toEqual({
+    await expect(updateStatus()).resolves.toEqual({
       current: currentVersion,
-      update: {
-        latest: {
-          version: "999.0.0",
-          url: "https://github.com/guneet-xyz/dockyard/releases/tag/v999.0.0",
-        },
-        available: true,
+      enabled: true,
+      latest: {
+        version: "999.0.0",
+        url: "https://github.com/guneet-xyz/dockyard/releases/tag/v999.0.0",
       },
+      available: true,
     })
   })
 
   it("does not report an update when the running version is current", async () => {
     fetchMock.mockResolvedValue(release(`v${currentVersion}`))
-    await expect(versionInfo(true)).resolves.toMatchObject({
-      update: { available: false },
+    await expect(updateStatus()).resolves.toMatchObject({
+      enabled: true,
+      available: false,
+    })
+  })
+
+  it("does not report an update when the check fails", async () => {
+    fetchMock.mockRejectedValue(new Error("offline"))
+    await expect(updateStatus()).resolves.toMatchObject({
+      enabled: true,
+      latest: null,
+      available: false,
     })
   })
 
@@ -141,9 +158,11 @@ describe("version information by audience", () => {
     "makes no outbound request when UPDATE_CHECK=%s",
     async (value) => {
       vi.stubEnv("UPDATE_CHECK", value)
-      await expect(versionInfo(true)).resolves.toEqual({
+      await expect(updateStatus()).resolves.toEqual({
         current: currentVersion,
-        update: null,
+        enabled: false,
+        latest: null,
+        available: false,
       })
       expect(fetchMock).not.toHaveBeenCalled()
     },

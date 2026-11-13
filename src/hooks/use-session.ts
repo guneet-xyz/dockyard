@@ -12,6 +12,7 @@ export function useSession() {
       api<{
         user: SessionUser | null
         registryHost: string
+        version: string
       }>("/api/auth/me"),
   })
 }

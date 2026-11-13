@@ -91,8 +91,9 @@ export type RegistryOverview = {
   canWrite: boolean
 }
 export type LatestRelease = { version: string; url: string }
-export type VersionInfo = {
+export type UpdateStatus = {
   current: string
-  // Only administrators receive update details, and only when the check is enabled.
-  update: { latest: LatestRelease | null; available: boolean } | null
+  enabled: boolean
+  latest: LatestRelease | null
+  available: boolean
 }

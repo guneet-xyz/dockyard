@@ -1,6 +1,6 @@
 import packageJson from "../../package.json"
 import { config } from "./config"
-import type { LatestRelease, VersionInfo } from "./types"
+import type { LatestRelease, UpdateStatus } from "./types"
 
 export const RELEASES_REPOSITORY = "guneet-xyz/dockyard"
 export const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPOSITORY}/releases/latest`
@@ -45,11 +45,12 @@ async function fetchLatestRelease(): Promise<LatestRelease> {
     body && typeof body === "object" && "tag_name" in body
       ? body.tag_name
       : undefined
-  const parsed = typeof tag === "string" ? parseVersion(tag) : null
+  const name = typeof tag === "string" ? tag.trim() : ""
+  const parsed = parseVersion(name)
   if (!parsed) throw new Error("the latest release has no stable version tag")
   return {
     version: parsed.join("."),
-    url: `https://github.com/${RELEASES_REPOSITORY}/releases/tag/${tag}`,
+    url: `https://github.com/${RELEASES_REPOSITORY}/releases/tag/${name}`,
   }
 }
 
@@ -84,17 +85,19 @@ export async function latestRelease(): Promise<LatestRelease | null> {
   return pending
 }
 
-export async function versionInfo(isAdmin: boolean): Promise<VersionInfo> {
-  if (!isAdmin || !config.updateCheck)
-    return { current: currentVersion, update: null }
+export async function updateStatus(): Promise<UpdateStatus> {
+  if (!config.updateCheck)
+    return {
+      current: currentVersion,
+      enabled: false,
+      latest: null,
+      available: false,
+    }
   const latest = await latestRelease()
   return {
     current: currentVersion,
-    update: {
-      latest,
-      available: latest
-        ? isNewerVersion(latest.version, currentVersion)
-        : false,
-    },
+    enabled: true,
+    latest,
+    available: latest ? isNewerVersion(latest.version, currentVersion) : false,
   }
 }

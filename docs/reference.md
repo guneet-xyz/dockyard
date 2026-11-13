@@ -218,7 +218,7 @@ Compose creates volumes for PostgreSQL, registry blobs, and signing certificates
 
 ### Version and update check
 
-The sidebar shows the running Dockyard version to everyone. For administrators, the web service also checks the [latest GitHub release](https://github.com/guneet-xyz/dockyard/releases/latest) and, when it is newer, shows an **Update available** link to its release notes. Guests and non-admin users never see update details, and their page views never trigger the check.
+The sidebar shows the running Dockyard version to everyone. For administrators, the web service also checks the [latest GitHub release](https://github.com/guneet-xyz/dockyard/releases/latest) and, when it is newer, shows an **Update available** link to its release notes. The check runs only when an administrator loads the UI, through the admin-only `/api/version` endpoint. Guests and non-admin users never see update details, and their page views never trigger it. The running version (also returned by `/api/auth/me`) is visible to anyone who can open the UI, so keep the instance updated rather than relying on hiding it.
 
 - The request goes from the web container to `https://api.github.com/repos/guneet-xyz/dockyard/releases/latest`; browsers never contact GitHub. It sends no credentials, registry data, or instance details beyond a `dockyard/<version>` user agent.
 - Results are cached in memory for 6 hours. A failed check (offline, rate-limited, or unexpected response) is logged as a warning, hides the notice, and is retried after an hour; the last successful result is kept meanwhile.

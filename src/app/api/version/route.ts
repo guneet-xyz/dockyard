@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server"
 
-import { currentUser } from "@/lib/auth"
+import { requireUser } from "@/lib/auth"
 import { apiError } from "@/lib/http"
-import { versionInfo } from "@/lib/version"
+import { updateStatus } from "@/lib/version"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
-    const user = await currentUser()
-    return NextResponse.json(await versionInfo(user?.role === "admin"), {
+    await requireUser(true)
+    return NextResponse.json(await updateStatus(), {
       headers: { "Cache-Control": "no-store" },
     })
   } catch (error) {
