@@ -90,3 +90,10 @@ export type RegistryOverview = {
   defaultVisibility: Visibility
   canWrite: boolean
 }
+export type LatestRelease = { version: string; url: string }
+export type UpdateStatus = {
+  current: string
+  enabled: boolean
+  latest: LatestRelease | null
+  available: boolean
+}
