@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/guneet-xyz/dockyard/compare/v0.2.0...v0.3.0) (2026-11-13)
+
+
+### Features
+
+* show the running version and notify admins about newer releases ([#13](https://github.com/guneet-xyz/dockyard/issues/13)) ([70dc405](https://github.com/guneet-xyz/dockyard/commit/70dc405b975187d758b0985bb7053eaf1aca381f)), closes [#12](https://github.com/guneet-xyz/dockyard/issues/12)
+
+
+### Bug Fixes
+
+* count Docker and containerd pulls that resolve tags with HEAD ([#6](https://github.com/guneet-xyz/dockyard/issues/6)) ([7cbc9ce](https://github.com/guneet-xyz/dockyard/commit/7cbc9cea350387851fcc76ee30418d5f2da17b8a)), closes [#5](https://github.com/guneet-xyz/dockyard/issues/5)
+
 ## [0.2.0](https://github.com/guneet-xyz/dockyard/compare/v0.1.0...v0.2.0) (2026-11-08)
 
 
