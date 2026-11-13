@@ -84,6 +84,7 @@ services:
       REGISTRY_TOKEN_CERT_PATH: /certs/token.crt
       REGISTRY_WEBHOOK_SECRET: ${REGISTRY_WEBHOOK_SECRET:?Set REGISTRY_WEBHOOK_SECRET in .env}
       DEFAULT_REPOSITORY_VISIBILITY: ${DEFAULT_REPOSITORY_VISIBILITY:-public}
+      UPDATE_CHECK: ${UPDATE_CHECK:-true}
     volumes:
       - registry_certs:/certs:ro
     healthcheck:

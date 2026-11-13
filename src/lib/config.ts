@@ -21,6 +21,10 @@ export const config = {
       ? "private"
       : "public"
   },
+  get updateCheck() {
+    const value = process.env.UPDATE_CHECK?.trim().toLowerCase()
+    return !["false", "0", "off", "no"].includes(value ?? "")
+  },
   get secureCookies() {
     return new URL(this.appUrl).protocol === "https:"
   },

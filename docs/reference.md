@@ -216,6 +216,17 @@ Compose creates volumes for PostgreSQL, registry blobs, and signing certificates
 - Run Distribution garbage collection only during a maintenance window with **all registry writes stopped**. See the [official garbage collection guidance](https://distribution.github.io/distribution/about/garbage-collection/). Never run GC alongside active pushes.
 - Generated signing certificates are valid for 10 years. Plan certificate/key rotation before expiry and restart the app and registry together; existing tokens may become invalid. Do not delete the signing volume casually.
 
+### Version and update check
+
+The sidebar shows the running Dockyard version to everyone. For administrators, the web service also checks the [latest GitHub release](https://github.com/guneet-xyz/dockyard/releases/latest) and, when it is newer, shows an **Update available** link to its release notes. Guests and non-admin users never see update details, and their page views never trigger the check.
+
+- The request goes from the web container to `https://api.github.com/repos/guneet-xyz/dockyard/releases/latest`; browsers never contact GitHub. It sends no credentials, registry data, or instance details beyond a `dockyard/<version>` user agent.
+- Results are cached in memory for 6 hours. A failed check (offline, rate-limited, or unexpected response) is logged as a warning, hides the notice, and is retried after an hour; the last successful result is kept meanwhile.
+- Only stable `vMAJOR.MINOR.PATCH` releases are compared, numerically against the version in `package.json` that the image was built from.
+- Set `UPDATE_CHECK=false` to turn off the outbound request, for example on offline installs. The running version is still shown. Recreate the `web` container after changing it.
+
+The notice is informational only: Dockyard never updates itself. Follow [Use published images with Compose](releases.md#use-published-images-with-compose) or your own deployment procedure to upgrade.
+
 ## Local development
 
 Requires Node.js 22, pnpm 10, PostgreSQL 17, and a token-authenticated Distribution registry.

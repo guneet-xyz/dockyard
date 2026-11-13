@@ -32,6 +32,7 @@ See [the reference guide](reference.md) for:
 - [Ingress environment variables](reference.md#environment-configured-ingress-image).
 - [Access control and authentication](reference.md#access-model).
 - [Persistence, backups, garbage collection, and signing-key maintenance](reference.md#persistence-and-maintenance).
+- [Version display and the update check](reference.md#version-and-update-check), including `UPDATE_CHECK`.
 - [Local development](reference.md#local-development) and [quality checks](reference.md#quality-checks).
 - [Architecture](reference.md#architecture).
 

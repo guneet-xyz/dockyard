@@ -8,6 +8,7 @@ import {
   Box,
   ChevronDown,
   ChevronRight,
+  CircleArrowUp,
   CircleHelp,
   Command,
   Compass,
@@ -27,6 +28,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { useSession } from "@/hooks/use-session"
+import { useVersion } from "@/hooks/use-version"
 import { api } from "@/lib/api-client"
 import { cn } from "@/lib/utils"
 
@@ -52,8 +54,9 @@ const navigation = [
 
 function Sidebar({ close }: { close?: () => void }) {
   const pathname = usePathname()
-  const { data } = useSession()
+  const { data, isPending } = useSession()
   const isAdmin = data?.user?.role === "admin"
+  const { data: version } = useVersion(data?.user?.role, !isPending)
   return (
     <div className="flex h-full flex-col bg-[#0b1016] px-4 py-6">
       <Link href="/" onClick={close} className="mb-8 px-2">
@@ -150,8 +153,20 @@ function Sidebar({ close }: { close?: () => void }) {
           Registry documentation
           <ExternalLink className="ml-auto size-3" />
         </a>
+        {version?.update?.available && version.update.latest && (
+          <a
+            href={version.update.latest.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/15"
+          >
+            <CircleArrowUp className="size-3.5" />
+            Update available: v{version.update.latest.version}
+            <ExternalLink className="ml-auto size-3" />
+          </a>
+        )}
         <div className="mt-5 flex items-center justify-between border-t px-3 pt-4 text-[10px] text-muted-foreground/60">
-          <span>Dockyard v1.0</span>
+          <span>{version ? `Dockyard v${version.current}` : "Dockyard"}</span>
           <span className="flex items-center gap-1.5">
             <Command className="size-3" />
             Built for builders
