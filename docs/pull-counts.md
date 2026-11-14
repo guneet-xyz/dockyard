@@ -10,6 +10,8 @@ Both methods count because clients resolve tags differently. Docker and containe
 
 **Repeated lookups collapse into one pull.** Lookups of the same image tag by the same client within **60 seconds** count once. A client is identified by the address the registry reports, its user agent, and its account (anonymous, user, or key). Requests without a reported client address are not merged.
 
+**Lookups that are part of publishing do not count.** Publishers such as `docker buildx imagetools create` look a tag up immediately before pushing it. When a manifest push of a tag arrives, a lookup of that tag counted by the same client (address, user agent, and account) within the preceding 60 seconds is withdrawn. Lookups after the push, by other clients, or more than 60 seconds earlier still count, and a redelivered push withdraws nothing more.
+
 This is an observed lookup metric, **not a verified completed Docker/OCI download**, unique-user count, or billing-grade analytics:
 
 - **"Already up to date" pulls count.** A `docker pull` or `docker compose pull` of an unchanged tag still looks the tag up; so do update checkers and deployment tools that poll a tag (at most once per minute per client and tag). Notifications do not report whether every layer was downloaded successfully.
@@ -41,7 +43,7 @@ If using a separately managed Distribution service, keep the existing Dockyard n
 
 ## Reliability and privacy
 
-Counter increments use an atomic PostgreSQL upsert. A registry event ID is recorded in the **same transaction** as its counter update, so retrying the same event (including concurrent deliveries or duplicate IDs within a batch) increments only once. A failed transaction can be safely retried. The per-client window is claimed in that same transaction with a conditional upsert, so concurrent lookups by one client still count once. Windows use the registry's event timestamps; a notification delivered more than about ten minutes late may count again after its window has been pruned.
+Counter increments use an atomic PostgreSQL upsert. A registry event ID is recorded in the **same transaction** as its counter update, so retrying the same event (including concurrent deliveries or duplicate IDs within a batch) increments only once. A failed transaction can be safely retried. The per-client window is claimed in that same transaction with a conditional upsert, so concurrent lookups by one client still count once. Windows use the registry's event timestamps; a notification delivered more than about ten minutes late may count again after its window has been pruned. A push withdraws a publishing lookup by deleting that client's open window and decrementing the tag's counter (never below zero) in the transaction that records the push's audit entry, so each push is applied once. Distribution delivers notifications in order, so a lookup's event is processed before the push that follows it. Pushes of digests only, and lookups made before an image's counters were reset, are left alone.
 
 Notifications are asynchronous and retried by Distribution, so displayed counts may lag behind requests. Distribution's queue is in memory; events can be lost during registry restarts or prolonged outages. There is no backfill for missed events. Do not interpret these counters as an exact number of completed downloads.
 

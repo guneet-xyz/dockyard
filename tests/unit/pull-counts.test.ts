@@ -5,12 +5,13 @@ import {
   registryPullEvents,
   registryPullWindows,
 } from "@/lib/db/schema"
-import { recordPull } from "@/lib/pull-counts"
+import { recordPull, retractPublishingLookup } from "@/lib/pull-counts"
 import {
   countablePull,
   INTERNAL_REGISTRY_USER_AGENT,
   pullAfterReset,
   pullClientKey,
+  taggedPush,
   type RegistryEvent,
 } from "@/lib/registry-events"
 
@@ -303,4 +304,128 @@ describe("atomic counter collection", () => {
       expect(mocks.increment).not.toHaveBeenCalled()
     },
   )
+})
+
+describe("publication lookups", () => {
+  const secret = "s".repeat(32)
+  const client = { addr: "203.0.113.5:40000", useragent: "containerd/2" }
+  const push: RegistryEvent = {
+    ...event,
+    id: "22222222-2222-4222-8222-222222222222",
+    action: "push",
+    timestamp: "2026-10-04T00:00:01Z",
+    actor: { name: "_key_publisher" },
+    request: { ...client, method: "PUT" },
+  }
+  const lookupKey = pullClientKey(
+    { ...push, action: "pull", request: { ...client, method: "HEAD" } },
+    { repositoryName: "dockyard/web", tag: "latest" },
+    secret,
+  )
+
+  function fakeTx(options: {
+    window?: { key: string; countedAt: Date }
+    rows?: { deletedAt: Date | null; resetAt: Date | null }[]
+  }) {
+    const calls = { deleted: [] as unknown[], updated: [] as unknown[] }
+    const rows = [
+      ...(options.rows ?? [
+        { deletedAt: null, resetAt: null },
+        { deletedAt: null, resetAt: null },
+      ]),
+    ]
+    const tx = {
+      delete: (table: unknown) => {
+        expect(table).toBe(registryPullWindows)
+        return {
+          where: (condition: unknown) => ({
+            returning: async () => {
+              calls.deleted.push(condition)
+              return options.window
+                ? [{ countedAt: options.window.countedAt }]
+                : []
+            },
+          }),
+        }
+      },
+      select: () => ({
+        from: () => ({
+          where: () => ({ limit: async () => [rows.shift()] }),
+        }),
+      }),
+      update: (table: unknown) => {
+        expect(table).toBe(imageTagPulls)
+        return {
+          set: (values: unknown) => ({
+            where: async (condition: unknown) => {
+              calls.updated.push({ values, condition })
+            },
+          }),
+        }
+      },
+    }
+    return { tx: tx as never, calls }
+  }
+
+  beforeEach(() => vi.stubEnv("REGISTRY_WEBHOOK_SECRET", secret))
+
+  it("identifies manifests pushed by tag", () => {
+    expect(taggedPush(push)).toEqual({
+      repositoryName: "dockyard/web",
+      tag: "latest",
+    })
+    expect(taggedPush({ ...push, action: "pull" })).toBeNull()
+    expect(
+      taggedPush({ ...push, target: { ...push.target, tag: undefined } }),
+    ).toBeNull()
+    expect(
+      taggedPush({
+        ...push,
+        target: { ...push.target, mediaType: "application/octet-stream" },
+      }),
+    ).toBeNull()
+  })
+
+  it("withdraws a lookup the same client made just before pushing that tag", async () => {
+    const { tx, calls } = fakeTx({
+      window: { key: lookupKey!, countedAt: new Date(event.timestamp) },
+    })
+    await retractPublishingLookup(tx, push)
+    expect(calls.deleted).toHaveLength(1)
+    expect(calls.updated).toHaveLength(1)
+  })
+
+  it("leaves counts alone when the client has no counted lookup in the window", async () => {
+    const { tx, calls } = fakeTx({})
+    await retractPublishingLookup(tx, push)
+    expect(calls.deleted).toHaveLength(1)
+    expect(calls.updated).toHaveLength(0)
+  })
+
+  it("does not withdraw lookups for retired or reset images", async () => {
+    const { tx, calls } = fakeTx({
+      window: { key: lookupKey!, countedAt: new Date(event.timestamp) },
+      rows: [
+        { deletedAt: null, resetAt: new Date("2026-10-04T00:00:00.500Z") },
+        { deletedAt: null, resetAt: null },
+      ],
+    })
+    await retractPublishingLookup(tx, push)
+    expect(calls.updated).toHaveLength(0)
+  })
+
+  it("ignores pushes without a tag or client address", async () => {
+    const untagged = fakeTx({})
+    await retractPublishingLookup(untagged.tx, {
+      ...push,
+      target: { ...push.target, tag: undefined },
+    })
+    const anonymous = fakeTx({})
+    await retractPublishingLookup(anonymous.tx, {
+      ...push,
+      request: { method: "PUT" },
+    })
+    expect(untagged.calls.deleted).toHaveLength(0)
+    expect(anonymous.calls.deleted).toHaveLength(0)
+  })
 })

@@ -1835,6 +1835,16 @@ async function main() {
       await registryCall(
         `/v2/${pullImage}/manifests/latest`,
         pullWriter,
+        "HEAD",
+      ),
+      200,
+      "A publisher looks the tag up before replacing it",
+    )
+    await waitForPulls(13)
+    await check(
+      await registryCall(
+        `/v2/${pullImage}/manifests/latest`,
+        pullWriter,
         "PUT",
         republishedIndex,
         "application/vnd.oci.image.index.v1+json",
@@ -1842,6 +1852,7 @@ async function main() {
       201,
       "Republish a tag without resetting its named pull history",
     )
+    // Converging back to 12 shows the push withdrew its own preceding lookup.
     assert.equal(
       (await waitForPulls(12)).images.find(
         (image: { name: string }) => image.name === "latest",
@@ -1891,6 +1902,45 @@ async function main() {
       4,
     )
     assertions++
+    const clientPush = (addr: string, offset: number) => ({
+      ...clientLookup(addr, "PUT", offset),
+      action: "push",
+    })
+    const publish = clientPush("198.51.100.9:40001", 121000)
+    await check(
+      await sendPullEvents([
+        clientLookup("198.51.100.9:40000", "HEAD", 120000),
+      ]),
+      200,
+      "A publisher's lookup is counted when it arrives",
+    )
+    await waitForPulls(16)
+    await check(
+      await sendPullEvents([publish, publish]),
+      200,
+      "Its push of the same tag withdraws that lookup once",
+    )
+    await check(
+      await sendPullEvents([publish, clientPush("198.51.100.8:40002", 121500)]),
+      200,
+      "Redelivered pushes and other clients' pushes withdraw nothing",
+    )
+    assert.equal(
+      (await waitForPulls(15)).images.find(
+        (image: { name: string }) => image.name === "latest",
+      ).pullCount,
+      4,
+    )
+    assertions++
+    await check(
+      await sendPullEvents([
+        clientLookup("198.51.100.9:40002", "HEAD", 122000),
+      ]),
+      200,
+      "Lookups after the push count as pulls",
+    )
+    assert.equal((await waitForPulls(16)).repository.pullCount, 16)
+    assertions++
     const ignoredPulls = [
       { ...pullEvent, id: randomUUID(), request: { method: "DELETE" } },
       {
@@ -1914,7 +1964,7 @@ async function main() {
       200,
       "Ignore internal, non-lookup, digest-only and blob notifications",
     )
-    assert.equal((await waitForPulls(15)).repository.pullCount, 15)
+    assert.equal((await waitForPulls(16)).repository.pullCount, 16)
     assertions++
     await check(
       await browser(

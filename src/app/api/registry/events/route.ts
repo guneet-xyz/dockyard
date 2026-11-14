@@ -8,7 +8,11 @@ import { auditEvents, projects, repositories } from "@/lib/db/schema"
 import { apiError, HttpError } from "@/lib/http"
 import { repositoryIdentity } from "@/lib/image-names"
 import { validRepositoryName } from "@/lib/permissions"
-import { pruneRecentPulls, recordPull } from "@/lib/pull-counts"
+import {
+  pruneRecentPulls,
+  recordPull,
+  retractPublishingLookup,
+} from "@/lib/pull-counts"
 import { registryEventSchema } from "@/lib/registry-events"
 import { withImageResource } from "@/lib/resource-locks"
 
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
           .onConflictDoNothing()
           .returning({ id: auditEvents.id })
         if (!inserted.length) return
+        await retractPublishingLookup(tx, event)
         const { projectName } = repositoryIdentity(name)
         let visibility = config.defaultVisibility
         let deletedAt: Date | null = null
