@@ -324,7 +324,7 @@ describe("publication lookups", () => {
   )
 
   function fakeTx(options: {
-    window?: { key: string; countedAt: Date }
+    window?: Date
     rows?: { deletedAt: Date | null; resetAt: Date | null }[]
   }) {
     const calls = { deleted: [] as unknown[], updated: [] as unknown[] }
@@ -341,9 +341,7 @@ describe("publication lookups", () => {
           where: (condition: unknown) => ({
             returning: async () => {
               calls.deleted.push(condition)
-              return options.window
-                ? [{ countedAt: options.window.countedAt }]
-                : []
+              return options.window ? [{ countedAt: options.window }] : []
             },
           }),
         }
@@ -386,9 +384,20 @@ describe("publication lookups", () => {
     ).toBeNull()
   })
 
+  it("matches the push to the same client's lookup window only", () => {
+    const target = taggedPush(push)!
+    expect(pullClientKey(push, target, secret)).toBe(lookupKey)
+    for (const other of [
+      { ...push, request: { ...push.request, addr: "203.0.113.6:40000" } },
+      { ...push, request: { ...push.request, useragent: "buildkit" } },
+      { ...push, actor: { name: "someone-else" } },
+    ])
+      expect(pullClientKey(other, target, secret)).not.toBe(lookupKey)
+  })
+
   it("withdraws a lookup the same client made just before pushing that tag", async () => {
     const { tx, calls } = fakeTx({
-      window: { key: lookupKey!, countedAt: new Date(event.timestamp) },
+      window: new Date(event.timestamp),
     })
     await retractPublishingLookup(tx, push)
     expect(calls.deleted).toHaveLength(1)
@@ -402,12 +411,20 @@ describe("publication lookups", () => {
     expect(calls.updated).toHaveLength(0)
   })
 
-  it("does not withdraw lookups for retired or reset images", async () => {
+  it.each([
+    [
+      "reset",
+      { deletedAt: null, resetAt: new Date("2026-10-04T00:00:00.500Z") },
+      null,
+    ],
+    ["deleted image", { deletedAt: new Date(), resetAt: null }, null],
+    ["deleted project", null, { deletedAt: new Date(), resetAt: null }],
+  ])("does not withdraw lookups for a %s", async (_case, image, project) => {
     const { tx, calls } = fakeTx({
-      window: { key: lookupKey!, countedAt: new Date(event.timestamp) },
+      window: new Date(event.timestamp),
       rows: [
-        { deletedAt: null, resetAt: new Date("2026-10-04T00:00:00.500Z") },
-        { deletedAt: null, resetAt: null },
+        image ?? { deletedAt: null, resetAt: null },
+        project ?? { deletedAt: null, resetAt: null },
       ],
     })
     await retractPublishingLookup(tx, push)

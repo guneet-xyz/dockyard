@@ -1906,41 +1906,63 @@ async function main() {
       ...clientLookup(addr, "PUT", offset),
       action: "push",
     })
-    const publish = clientPush("198.51.100.9:40001", 121000)
-    await check(
-      await sendPullEvents([
-        clientLookup("198.51.100.9:40000", "HEAD", 120000),
-      ]),
-      200,
+    const publisher = "198.51.100.9"
+    async function latestAfter(
+      events: unknown[],
+      total: number,
+      latest: number,
+      message: string,
+    ) {
+      await check(await sendPullEvents(events), 200, message)
+      assert.equal(
+        (await waitForPulls(total)).images.find(
+          (image: { name: string }) => image.name === "latest",
+        ).pullCount,
+        latest,
+        message,
+      )
+      assertions++
+    }
+    await latestAfter(
+      [clientLookup(`${publisher}:40000`, "HEAD", 120000)],
+      16,
+      5,
       "A publisher's lookup is counted when it arrives",
     )
-    await waitForPulls(16)
-    await check(
-      await sendPullEvents([publish, publish]),
-      200,
-      "Its push of the same tag withdraws that lookup once",
+    await latestAfter(
+      [clientPush(`${publisher}:40001`, 121000)],
+      15,
+      4,
+      "Its push of the same tag withdraws that lookup",
     )
-    await check(
-      await sendPullEvents([publish, clientPush("198.51.100.8:40002", 121500)]),
-      200,
+    await latestAfter(
+      [
+        clientLookup(`${publisher}:40002`, "HEAD", 121200),
+        clientLookup("198.51.100.8:40003", "HEAD", 121300),
+      ],
+      17,
+      6,
+      "Lookups after the push, and by other clients, count",
+    )
+    const secondPush = clientPush(`${publisher}:40004`, 121500)
+    await latestAfter(
+      [secondPush],
+      16,
+      5,
+      "Each push withdraws the publisher's latest open lookup",
+    )
+    await latestAfter(
+      [clientLookup(`${publisher}:40005`, "HEAD", 121400)],
+      17,
+      6,
+      "A new lookup opens a fresh window",
+    )
+    await latestAfter(
+      [secondPush, clientPush("198.51.100.10:40001", 121600)],
+      17,
+      6,
       "Redelivered pushes and other clients' pushes withdraw nothing",
     )
-    assert.equal(
-      (await waitForPulls(15)).images.find(
-        (image: { name: string }) => image.name === "latest",
-      ).pullCount,
-      4,
-    )
-    assertions++
-    await check(
-      await sendPullEvents([
-        clientLookup("198.51.100.9:40002", "HEAD", 122000),
-      ]),
-      200,
-      "Lookups after the push count as pulls",
-    )
-    assert.equal((await waitForPulls(16)).repository.pullCount, 16)
-    assertions++
     const ignoredPulls = [
       { ...pullEvent, id: randomUUID(), request: { method: "DELETE" } },
       {
@@ -1964,7 +1986,7 @@ async function main() {
       200,
       "Ignore internal, non-lookup, digest-only and blob notifications",
     )
-    assert.equal((await waitForPulls(16)).repository.pullCount, 16)
+    assert.equal((await waitForPulls(17)).repository.pullCount, 17)
     assertions++
     await check(
       await browser(
