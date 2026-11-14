@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/guneet-xyz/dockyard/compare/v0.3.0...v0.3.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* do not count a publisher's tag lookup right before its push as a pull ([#15](https://github.com/guneet-xyz/dockyard/issues/15)) ([a84512a](https://github.com/guneet-xyz/dockyard/commit/a84512a9fb82e92f54e5bc0f02d58553c88fd760)), closes [#14](https://github.com/guneet-xyz/dockyard/issues/14)
+
 ## [0.3.0](https://github.com/guneet-xyz/dockyard/compare/v0.2.0...v0.3.0) (2026-11-13)
 
 
