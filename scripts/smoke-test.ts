@@ -1835,6 +1835,16 @@ async function main() {
       await registryCall(
         `/v2/${pullImage}/manifests/latest`,
         pullWriter,
+        "HEAD",
+      ),
+      200,
+      "A publisher looks the tag up before replacing it",
+    )
+    await waitForPulls(13)
+    await check(
+      await registryCall(
+        `/v2/${pullImage}/manifests/latest`,
+        pullWriter,
         "PUT",
         republishedIndex,
         "application/vnd.oci.image.index.v1+json",
@@ -1842,6 +1852,7 @@ async function main() {
       201,
       "Republish a tag without resetting its named pull history",
     )
+    // Converging back to 12 shows the push withdrew its own preceding lookup.
     assert.equal(
       (await waitForPulls(12)).images.find(
         (image: { name: string }) => image.name === "latest",
@@ -1891,6 +1902,67 @@ async function main() {
       4,
     )
     assertions++
+    const clientPush = (addr: string, offset: number) => ({
+      ...clientLookup(addr, "PUT", offset),
+      action: "push",
+    })
+    const publisher = "198.51.100.9"
+    async function latestAfter(
+      events: unknown[],
+      total: number,
+      latest: number,
+      message: string,
+    ) {
+      await check(await sendPullEvents(events), 200, message)
+      assert.equal(
+        (await waitForPulls(total)).images.find(
+          (image: { name: string }) => image.name === "latest",
+        ).pullCount,
+        latest,
+        message,
+      )
+      assertions++
+    }
+    await latestAfter(
+      [clientLookup(`${publisher}:40000`, "HEAD", 120000)],
+      16,
+      5,
+      "A publisher's lookup is counted when it arrives",
+    )
+    await latestAfter(
+      [clientPush(`${publisher}:40001`, 121000)],
+      15,
+      4,
+      "Its push of the same tag withdraws that lookup",
+    )
+    await latestAfter(
+      [
+        clientLookup(`${publisher}:40002`, "HEAD", 121200),
+        clientLookup("198.51.100.8:40003", "HEAD", 121300),
+      ],
+      17,
+      6,
+      "Lookups after the push, and by other clients, count",
+    )
+    const secondPush = clientPush(`${publisher}:40004`, 121500)
+    await latestAfter(
+      [secondPush],
+      16,
+      5,
+      "Each push withdraws the publisher's latest open lookup",
+    )
+    await latestAfter(
+      [clientLookup(`${publisher}:40005`, "HEAD", 121400)],
+      17,
+      6,
+      "A new lookup opens a fresh window",
+    )
+    await latestAfter(
+      [secondPush, clientPush("198.51.100.10:40001", 121600)],
+      17,
+      6,
+      "Redelivered pushes and other clients' pushes withdraw nothing",
+    )
     const ignoredPulls = [
       { ...pullEvent, id: randomUUID(), request: { method: "DELETE" } },
       {
@@ -1914,7 +1986,7 @@ async function main() {
       200,
       "Ignore internal, non-lookup, digest-only and blob notifications",
     )
-    assert.equal((await waitForPulls(15)).repository.pullCount, 15)
+    assert.equal((await waitForPulls(17)).repository.pullCount, 17)
     assertions++
     await check(
       await browser(

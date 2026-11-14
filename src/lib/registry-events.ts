@@ -6,6 +6,7 @@ import { validRepositoryName } from "./permissions"
 export const INTERNAL_REGISTRY_USER_AGENT = "Dockyard/internal"
 // Repeated tag lookups by one client within this window are one pull (e.g. HEAD then GET).
 export const PULL_DEDUPLICATION_WINDOW_MS = 60_000
+const tagPattern = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/
 const manifestTypes = new Set([
   "application/vnd.oci.image.index.v1+json",
   "application/vnd.oci.image.manifest.v1+json",
@@ -48,9 +49,26 @@ export function countablePull(
     !repository ||
     !validRepositoryName(repository) ||
     !tag ||
-    !/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(tag) ||
+    !tagPattern.test(tag) ||
     !digest ||
     !/^sha256:[a-f0-9]{64}$/.test(digest) ||
+    !manifestTypes.has(mediaType ?? "")
+  )
+    return null
+  return { repositoryName: repository, tag }
+}
+
+// A manifest pushed by tag, as reported by Distribution's push notifications.
+export function taggedPush(
+  event: RegistryEvent,
+): { repositoryName: string; tag: string } | null {
+  const { repository, tag, mediaType } = event.target
+  if (
+    event.action !== "push" ||
+    !repository ||
+    !validRepositoryName(repository) ||
+    !tag ||
+    !tagPattern.test(tag) ||
     !manifestTypes.has(mediaType ?? "")
   )
     return null
