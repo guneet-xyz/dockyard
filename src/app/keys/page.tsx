@@ -2,22 +2,28 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
   KeyRound,
   Loader2,
+  MoreHorizontal,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
+  X,
 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { toast } from "sonner"
 
 import { KeyCredentialsDialog } from "@/components/key-credentials-dialog"
-import { ErrorState, TableSkeleton } from "@/components/shared"
+import { CopyButton, ErrorState, TableSkeleton } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -27,6 +33,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -36,13 +48,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { useProjects } from "@/hooks/use-projects"
 import { useRepositories } from "@/hooks/use-repositories"
 import { useSession } from "@/hooks/use-session"
 import { api } from "@/lib/api-client"
 import type { KeyCredentials } from "@/lib/key-export"
+import {
+  expiresSoon,
+  filterKeys,
+  KEY_PAGE_SIZE,
+  owners,
+  paginate,
+  type KeySort,
+  type KeyStatusFilter,
+} from "@/lib/key-list"
 import type { AccessKeyInfo, KeyAction, KeyGrant } from "@/lib/types"
-import { timeAgo } from "@/lib/utils"
+import { cn, timeAgo } from "@/lib/utils"
 
 type KeysResponse = {
   keys: AccessKeyInfo[]
@@ -369,6 +398,61 @@ function CreateKey({ canWrite }: { canWrite: boolean }) {
   )
 }
 
+const VISIBLE_GRANTS = 2
+
+function KeyGrants({ keyInfo }: { keyInfo: AccessKeyInfo }) {
+  const [expanded, setExpanded] = useState(false)
+  const listId = useId()
+  const hidden = keyInfo.grants.length - VISIBLE_GRANTS
+  const grants = expanded
+    ? keyInfo.grants
+    : keyInfo.grants.slice(0, VISIBLE_GRANTS)
+  return (
+    <div
+      id={listId}
+      className="flex max-w-80 min-w-44 flex-wrap items-center gap-1.5"
+    >
+      {grants.map((grant, index) => (
+        <Badge
+          key={index}
+          variant="outline"
+          className="max-w-full flex-wrap whitespace-normal"
+          title={`${grant.type} ${grant.target}: ${grant.actions.join(", ")}`}
+        >
+          <span className="text-muted-foreground/70 capitalize">
+            {grant.type}
+          </span>
+          <span className="min-w-0 font-mono break-all text-foreground/90">
+            {grant.target}
+          </span>
+          <span className="text-primary">{grant.actions.join(", ")}</span>
+        </Badge>
+      ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          className="text-[11px] font-medium text-primary hover:underline"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Show less" : `+${hidden} more`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Hidden only where the sidebar leaves too little room; smaller screens scroll.
+const createdColumn = "lg:max-[1400px]:hidden"
+
+const statuses: AccessKeyInfo["status"][] = [
+  "Active",
+  "Expired",
+  "Revoked",
+  "Owner disabled",
+]
+
 function KeysView() {
   const session = useSession()
   const client = useQueryClient()
@@ -377,6 +461,11 @@ function KeysView() {
     queryFn: () => api<KeysResponse>("/api/keys"),
     refetchInterval: 30000,
   })
+  const [search, setSearch] = useState("")
+  const [status, setStatus] = useState<KeyStatusFilter>("all")
+  const [owner, setOwner] = useState("all")
+  const [sort, setSort] = useState<KeySort>("newest")
+  const [page, setPage] = useState(1)
   const [revoking, setRevoking] = useState<AccessKeyInfo | null>(null)
   const [rotating, setRotating] = useState<AccessKeyInfo | null>(null)
   const [rotationPending, setRotationPending] = useState(false)
@@ -412,6 +501,33 @@ function KeysView() {
     },
     onError: (error) => toast.error(error.message),
   })
+  const viewerId = session.data?.user?.id
+  const all = query.data?.keys ?? []
+  const keyOwners = owners(all)
+  // Admins see every user's keys; the owner column and filter only help then.
+  const showOwners = Boolean(
+    query.data?.isAdmin &&
+    (keyOwners.length > 1 || all.some((key) => key.ownerId !== viewerId)),
+  )
+  const filtered = filterKeys(all, {
+    search,
+    status,
+    owner: showOwners ? owner : "all",
+    sort,
+    viewerId,
+  })
+  const filtering = Boolean(
+    search.trim() || status !== "all" || (showOwners && owner !== "all"),
+  )
+  const paged = paginate(filtered, page, KEY_PAGE_SIZE)
+  // Keep the page in range when revocations or refetches shrink the list.
+  if (paged.page !== page) setPage(paged.page)
+  function changeFilter<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value)
+      setPage(1)
+    }
+  }
   return (
     <div className="page-enter space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -461,90 +577,267 @@ function KeysView() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {query.data.keys.map((key) => {
-            const status = key.status
-            return (
-              <Card key={key.id}>
-                <CardHeader className="items-start justify-between gap-3 sm:flex-row">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <CardTitle className="text-sm break-all">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-48 flex-1">
+              <Search className="absolute top-2.5 left-3 size-4 text-muted-foreground" />
+              <Input
+                aria-label="Search keys"
+                className="pr-9 pl-9"
+                placeholder="Search by name, username, owner, or grant…"
+                value={search}
+                onChange={(event) =>
+                  changeFilter(setSearch)(event.target.value)
+                }
+              />
+              {search && (
+                <button
+                  className="absolute top-2.5 right-3 text-muted-foreground"
+                  aria-label="Clear search"
+                  onClick={() => changeFilter(setSearch)("")}
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+            <Select
+              value={status}
+              onValueChange={changeFilter((value: string) =>
+                setStatus(value as KeyStatusFilter),
+              )}
+            >
+              <SelectTrigger aria-label="Filter by status" className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {statuses.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {value}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {showOwners && (
+              <Select value={owner} onValueChange={changeFilter(setOwner)}>
+                <SelectTrigger aria-label="Filter by owner" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72 overflow-y-auto">
+                  <SelectItem value="all">All owners</SelectItem>
+                  <SelectItem value="mine">My keys</SelectItem>
+                  {keyOwners.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Select
+              value={sort}
+              onValueChange={changeFilter((value: string) =>
+                setSort(value as KeySort),
+              )}
+            >
+              <SelectTrigger aria-label="Sort keys" className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="name">Name A–Z</SelectItem>
+                <SelectItem value="last-used">Recently used</SelectItem>
+                <SelectItem value="expiry">Expiring soonest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {filtered.length} {filtered.length === 1 ? "key" : "keys"}
+            {filtering ? ` of ${all.length}` : ""}
+          </p>
+          <Card className="overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Status</TableHead>
+                  {showOwners && <TableHead>Owner</TableHead>}
+                  <TableHead>Grants</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className={createdColumn}>Created</TableHead>
+                  <TableHead className="w-10">
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.items.map((key) => (
+                  <TableRow
+                    key={key.id}
+                    data-key-id={key.id}
+                    className={cn(
+                      (key.status === "Revoked" || key.status === "Expired") &&
+                        "[&>td:not(:last-child)]:opacity-60",
+                    )}
+                  >
+                    <TableCell className="py-3">
+                      <p className="max-w-48 min-w-36 text-sm font-medium break-all">
                         {key.name}
-                      </CardTitle>
+                      </p>
+                      <div className="mt-0.5 flex max-w-48 items-center gap-1">
+                        <p
+                          className="min-w-0 truncate font-mono text-[11px] text-muted-foreground"
+                          title={key.username}
+                        >
+                          {key.username}
+                        </p>
+                        <CopyButton
+                          value={key.username}
+                          label={`Copy Docker username for ${key.name}`}
+                          className="size-6 shrink-0 text-muted-foreground"
+                        />
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
                       <Badge
-                        variant={status === "Active" ? "default" : "secondary"}
+                        variant={
+                          key.status === "Active" ? "default" : "secondary"
+                        }
                       >
-                        {status}
+                        {key.status}
                       </Badge>
-                      {key.ownerId !== session.data?.user?.id && (
-                        <Badge
-                          variant="outline"
-                          className="max-w-full break-all whitespace-normal"
+                    </TableCell>
+                    {showOwners && (
+                      <TableCell className="py-3 text-xs">
+                        <p
+                          className="max-w-32 truncate"
+                          title={key.ownerUsername}
                         >
                           {key.ownerUsername}
-                        </Badge>
+                        </p>
+                        {key.ownerId === viewerId && (
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            you
+                          </p>
+                        )}
+                      </TableCell>
+                    )}
+                    <TableCell className="py-3">
+                      <KeyGrants keyInfo={key} />
+                    </TableCell>
+                    <TableCell className="py-3 text-xs whitespace-nowrap text-muted-foreground">
+                      {key.lastUsedAt ? timeAgo(key.lastUsedAt) : "Never"}
+                      {key.rotatedAt && (
+                        <p className="mt-1 text-[11px]">
+                          Rotated {timeAgo(key.rotatedAt)}
+                        </p>
                       )}
-                    </div>
-                    <p className="mt-2 font-mono text-[11px] break-all text-muted-foreground">
-                      {key.username}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    {status === "Active" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setRotating(key)}
-                      >
-                        <RefreshCw />
-                        Rotate
-                      </Button>
-                    )}
-                    {!key.revokedAt && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setRevoking(key)}
-                      >
-                        Revoke
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {key.grants.map((grant, index) => (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="max-w-full flex-wrap py-1.5 whitespace-normal"
-                      >
-                        <span className="capitalize">{grant.type}</span>
-                        <span className="min-w-0 font-mono break-all">
-                          {grant.target}
-                        </span>
-                        <span className="text-primary">
-                          {grant.actions.join(", ")}
-                        </span>
-                      </Badge>
-                    ))}
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] text-muted-foreground">
-                    <span>Created {timeAgo(key.createdAt)}</span>
-                    <span>Last authenticated {timeAgo(key.lastUsedAt)}</span>
-                    {key.rotatedAt && (
-                      <span>Last rotated {timeAgo(key.rotatedAt)}</span>
-                    )}
-                    <span>
-                      {key.expiresAt
-                        ? `Expires ${new Date(key.expiresAt).toLocaleDateString()}`
-                        : "No expiration"}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "py-3 text-xs whitespace-nowrap text-muted-foreground",
+                        expiresSoon(key) && "font-medium text-amber-400",
+                      )}
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        {expiresSoon(key) && (
+                          <AlertTriangle
+                            className="size-3.5"
+                            aria-label="Expires soon"
+                            role="img"
+                          />
+                        )}
+                        {key.expiresAt
+                          ? new Date(key.expiresAt).toLocaleDateString()
+                          : "Never"}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "py-3 text-xs whitespace-nowrap text-muted-foreground",
+                        createdColumn,
+                      )}
+                    >
+                      {timeAgo(key.createdAt)}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      {!key.revokedAt && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7"
+                              aria-label={`Actions for ${key.name}`}
+                            >
+                              <MoreHorizontal />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {key.status === "Active" && (
+                              <DropdownMenuItem
+                                onSelect={() => setRotating(key)}
+                              >
+                                <RefreshCw />
+                                Rotate
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              className="text-red-400 focus:text-red-400"
+                              onSelect={() => setRevoking(key)}
+                            >
+                              <Trash2 />
+                              Revoke
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!filtered.length && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={showOwners ? 8 : 7}
+                      className="py-12 text-center text-muted-foreground"
+                    >
+                      No matching keys.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+          {paged.pages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span>
+                Showing {paged.first}–{paged.last} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={paged.page <= 1}
+                  onClick={() => setPage(paged.page - 1)}
+                >
+                  <ChevronLeft />
+                  Previous
+                </Button>
+                <span>
+                  Page {paged.page} of {paged.pages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={paged.page >= paged.pages}
+                  onClick={() => setPage(paged.page + 1)}
+                >
+                  Next
+                  <ChevronRight />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <Dialog

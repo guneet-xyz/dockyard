@@ -13,9 +13,11 @@ import { Skeleton } from "./ui/skeleton"
 export function CopyButton({
   value,
   className,
+  label = "Copy to clipboard",
 }: {
   value: string
   className?: string
+  label?: string
 }) {
   const [copied, setCopied] = useState(false)
   async function copy() {
@@ -35,7 +37,7 @@ export function CopyButton({
       size="icon"
       className={className}
       onClick={copy}
-      aria-label={copied ? "Copied" : "Copy to clipboard"}
+      aria-label={copied ? "Copied" : label}
     >
       {copied ? (
         <Check className="text-primary" />
