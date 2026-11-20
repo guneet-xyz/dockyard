@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   KeyRound,
@@ -15,11 +16,11 @@ import {
   X,
 } from "lucide-react"
 import Link from "next/link"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { toast } from "sonner"
 
 import { KeyCredentialsDialog } from "@/components/key-credentials-dialog"
-import { ErrorState, TableSkeleton } from "@/components/shared"
+import { CopyButton, ErrorState, TableSkeleton } from "@/components/shared"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -401,12 +402,16 @@ const VISIBLE_GRANTS = 2
 
 function KeyGrants({ keyInfo }: { keyInfo: AccessKeyInfo }) {
   const [expanded, setExpanded] = useState(false)
+  const listId = useId()
   const hidden = keyInfo.grants.length - VISIBLE_GRANTS
   const grants = expanded
     ? keyInfo.grants
     : keyInfo.grants.slice(0, VISIBLE_GRANTS)
   return (
-    <div className="flex max-w-80 min-w-48 flex-wrap items-center gap-1.5">
+    <div
+      id={listId}
+      className="flex max-w-80 min-w-44 flex-wrap items-center gap-1.5"
+    >
       {grants.map((grant, index) => (
         <Badge
           key={index}
@@ -428,11 +433,7 @@ function KeyGrants({ keyInfo }: { keyInfo: AccessKeyInfo }) {
           type="button"
           className="text-[11px] font-medium text-primary hover:underline"
           aria-expanded={expanded}
-          aria-label={
-            expanded
-              ? `Show fewer grants for ${keyInfo.name}`
-              : `Show all ${keyInfo.grants.length} grants for ${keyInfo.name}`
-          }
+          aria-controls={listId}
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? "Show less" : `+${hidden} more`}
@@ -516,9 +517,11 @@ function KeysView() {
     viewerId,
   })
   const filtering = Boolean(
-    search || status !== "all" || (showOwners && owner !== "all"),
+    search.trim() || status !== "all" || (showOwners && owner !== "all"),
   )
   const paged = paginate(filtered, page, KEY_PAGE_SIZE)
+  // Keep the page in range when revocations or refetches shrink the list.
+  if (paged.page !== page) setPage(paged.page)
   function changeFilter<T>(setter: (value: T) => void) {
     return (value: T) => {
       setter(value)
@@ -642,14 +645,12 @@ function KeysView() {
               <SelectContent>
                 <SelectItem value="newest">Newest first</SelectItem>
                 <SelectItem value="name">Name A–Z</SelectItem>
-                <SelectItem value="last-used">
-                  Recently authenticated
-                </SelectItem>
+                <SelectItem value="last-used">Recently used</SelectItem>
                 <SelectItem value="expiry">Expiring soonest</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground" aria-live="polite">
             {filtered.length} {filtered.length === 1 ? "key" : "keys"}
             {filtering ? ` of ${all.length}` : ""}
           </p>
@@ -676,19 +677,26 @@ function KeysView() {
                     data-key-id={key.id}
                     className={cn(
                       (key.status === "Revoked" || key.status === "Expired") &&
-                        "text-muted-foreground [&>td>*]:opacity-70",
+                        "[&>td:not(:last-child)]:opacity-60",
                     )}
                   >
                     <TableCell className="py-3">
                       <p className="max-w-48 min-w-36 text-sm font-medium break-all">
                         {key.name}
                       </p>
-                      <p
-                        className="mt-1 max-w-48 truncate font-mono text-[11px] text-muted-foreground"
-                        title={key.username}
-                      >
-                        {key.username}
-                      </p>
+                      <div className="mt-0.5 flex max-w-48 items-center gap-1">
+                        <p
+                          className="min-w-0 truncate font-mono text-[11px] text-muted-foreground"
+                          title={key.username}
+                        >
+                          {key.username}
+                        </p>
+                        <CopyButton
+                          value={key.username}
+                          label={`Copy Docker username for ${key.name}`}
+                          className="size-6 shrink-0 text-muted-foreground"
+                        />
+                      </div>
                     </TableCell>
                     <TableCell className="py-3">
                       <Badge
@@ -700,12 +708,17 @@ function KeysView() {
                       </Badge>
                     </TableCell>
                     {showOwners && (
-                      <TableCell className="py-3 text-xs break-all">
-                        {key.ownerUsername}
+                      <TableCell className="py-3 text-xs">
+                        <p
+                          className="max-w-32 truncate"
+                          title={key.ownerUsername}
+                        >
+                          {key.ownerUsername}
+                        </p>
                         {key.ownerId === viewerId && (
-                          <span className="ml-2 text-[10px] text-muted-foreground">
+                          <p className="mt-0.5 text-[10px] text-muted-foreground">
                             you
-                          </span>
+                          </p>
                         )}
                       </TableCell>
                     )}
@@ -714,6 +727,11 @@ function KeysView() {
                     </TableCell>
                     <TableCell className="py-3 text-xs whitespace-nowrap text-muted-foreground">
                       {key.lastUsedAt ? timeAgo(key.lastUsedAt) : "Never"}
+                      {key.rotatedAt && (
+                        <p className="mt-1 text-[11px]">
+                          Rotated {timeAgo(key.rotatedAt)}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -721,9 +739,18 @@ function KeysView() {
                         expiresSoon(key) && "font-medium text-amber-400",
                       )}
                     >
-                      {key.expiresAt
-                        ? new Date(key.expiresAt).toLocaleDateString()
-                        : "Never"}
+                      <span className="inline-flex items-center gap-1.5">
+                        {expiresSoon(key) && (
+                          <AlertTriangle
+                            className="size-3.5"
+                            aria-label="Expires soon"
+                            role="img"
+                          />
+                        )}
+                        {key.expiresAt
+                          ? new Date(key.expiresAt).toLocaleDateString()
+                          : "Never"}
+                      </span>
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -732,11 +759,6 @@ function KeysView() {
                       )}
                     >
                       {timeAgo(key.createdAt)}
-                      {key.rotatedAt && (
-                        <p className="mt-1 text-[11px]">
-                          Rotated {timeAgo(key.rotatedAt)}
-                        </p>
-                      )}
                     </TableCell>
                     <TableCell className="py-3">
                       {!key.revokedAt && (

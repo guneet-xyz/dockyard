@@ -506,6 +506,7 @@ test("automation key can be rotated, downloaded once, and revoked", async ({
   await page
     .getByRole("button", { name: "I saved the secret", exact: true })
     .click()
+  // Shown with "Last used", so it stays visible at every table width.
   await expect(row.getByText(/^Rotated /)).toBeVisible()
   expect(
     await page.evaluate(
@@ -528,6 +529,9 @@ test("automation key can be rotated, downloaded once, and revoked", async ({
   await page.getByRole("option", { name: "Revoked", exact: true }).click()
   await expect(row).toBeVisible()
   await expect(page.getByText(/^\d+ keys? of \d+$/)).toBeVisible()
+  await expect(
+    page.locator("tbody").getByText("Active", { exact: true }),
+  ).toHaveCount(0)
   await page.goto("/activity")
   await expect(
     page.getByText("Rotated automation key", { exact: true }).first(),

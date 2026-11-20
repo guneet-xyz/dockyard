@@ -76,6 +76,7 @@ describe("automation key list", () => {
     expect(names({ search: "maria" })).toEqual(["deploy-9"])
     expect(names({ search: "_key_nightly" })).toEqual(["nightly"])
     expect(names({ search: "missing" })).toEqual([])
+    expect(names({ search: "   " })).toHaveLength(keys.length)
   })
 
   it("filters by status and owner", () => {
@@ -86,6 +87,8 @@ describe("automation key list", () => {
       "nightly",
     ])
     expect(names({ owner: "maria" })).toEqual(["deploy-9"])
+    expect(names({ owner: "nobody" })).toEqual([])
+    expect(names({ owner: "mine", viewerId: undefined })).toEqual([])
   })
 
   it("sorts names naturally", () => {
@@ -106,13 +109,19 @@ describe("automation key list", () => {
     ])
   })
 
-  it("sorts active keys by soonest expiry, ignoring revoked and expired keys", () => {
+  it("sorts active keys by soonest expiry, then never-expiring and inactive keys", () => {
     expect(names({ sort: "expiry" })).toEqual([
       "deploy-9",
       "deploy-10",
       "release",
       "nightly",
     ])
+    const forever = key({ name: "forever", createdAt: days(-20) })
+    expect(
+      filterKeys([...keys, forever], { ...defaults, sort: "expiry" }).map(
+        (item) => item.name,
+      ),
+    ).toEqual(["deploy-9", "deploy-10", "forever", "release", "nightly"])
   })
 
   it("does not mutate its input", () => {
@@ -151,6 +160,8 @@ describe("automation key list", () => {
     expect(expiresSoon(keys[2], now)).toBe(false)
     expect(expiresSoon(key({ expiresAt: days(-1) }), now)).toBe(true)
     expect(expiresSoon(key({ expiresAt: null }), now)).toBe(false)
+    expect(expiresSoon(key({ expiresAt: days(14) }), now)).toBe(true)
+    expect(expiresSoon(key({ expiresAt: days(14.01) }), now)).toBe(false)
   })
 
   it("lists distinct owners alphabetically", () => {

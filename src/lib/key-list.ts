@@ -39,6 +39,11 @@ function compareTimes(
   return newestFirst ? b - a : a - b
 }
 
+// Active keys that expire, then active keys that never expire, then inactive keys.
+function expiryRank(key: AccessKeyInfo) {
+  return key.status !== "Active" ? 2 : key.expiresAt ? 0 : 1
+}
+
 export function filterKeys(keys: AccessKeyInfo[], options: KeyListOptions) {
   return keys
     .filter(
@@ -47,7 +52,7 @@ export function filterKeys(keys: AccessKeyInfo[], options: KeyListOptions) {
         (options.status === "all" || key.status === options.status) &&
         (options.owner === "all" ||
           (options.owner === "mine"
-            ? key.ownerId === options.viewerId
+            ? options.viewerId !== undefined && key.ownerId === options.viewerId
             : key.ownerUsername === options.owner)),
     )
     .sort(
@@ -57,11 +62,8 @@ export function filterKeys(keys: AccessKeyInfo[], options: KeyListOptions) {
           : options.sort === "last-used"
             ? compareTimes(time(a.lastUsedAt), time(b.lastUsedAt), true)
             : options.sort === "expiry"
-              ? compareTimes(
-                  a.status === "Active" ? time(a.expiresAt) : null,
-                  b.status === "Active" ? time(b.expiresAt) : null,
-                  false,
-                )
+              ? expiryRank(a) - expiryRank(b) ||
+                compareTimes(time(a.expiresAt), time(b.expiresAt), false)
               : 0) || compareTimes(time(a.createdAt), time(b.createdAt), true),
     )
 }
