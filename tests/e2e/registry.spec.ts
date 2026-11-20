@@ -422,23 +422,38 @@ test("automation key can be rotated, downloaded once, and revoked", async ({
     .getByRole("button", { name: "I saved the secret", exact: true })
     .click()
   await page.reload()
-  await expect(
-    page.getByRole("heading", { name: keyName, exact: true }),
-  ).toBeVisible()
+  const row = page.locator(`tr[data-key-id="${exported.id}"]`)
+  await expect(row).toContainText(keyName)
   await expect(page.getByLabel("Key secret", { exact: true })).toHaveCount(0)
   await expect(
     page.getByRole("button", { name: "Download JSON", exact: true }),
   ).toHaveCount(0)
-  const card = page
-    .locator("div.rounded-xl.border.bg-card")
-    .filter({ has: page.getByRole("heading", { name: keyName, exact: true }) })
-  await card.getByRole("button", { name: "Rotate", exact: true }).click()
+  // Search narrows the table to this key by a grant target.
+  await page.getByLabel("Search keys", { exact: true }).fill(`${project}/init`)
+  await expect(page.locator("tbody tr")).toHaveCount(1)
+  await expect(row).toContainText(`${project}/init`)
+  await page.getByLabel("Search keys", { exact: true }).fill(keyUsername)
+  await expect(page.locator("tbody tr")).toHaveCount(1)
+  await page
+    .getByLabel("Search keys", { exact: true })
+    .fill(`missing-${suffix}`)
+  await expect(
+    page.getByText("No matching keys.", { exact: true }),
+  ).toBeVisible()
+  await page.getByRole("button", { name: "Clear search", exact: true }).click()
+  const keyAction = async (name: string) => {
+    await row
+      .getByRole("button", { name: `Actions for ${keyName}`, exact: true })
+      .click()
+    await page.getByRole("menuitem", { name, exact: true }).click()
+  }
+  await keyAction("Rotate")
   await expect(
     page.getByRole("dialog", { name: "Rotate this key?" }),
   ).toContainText("old secret stops authenticating immediately")
   await page.getByRole("button", { name: "Cancel", exact: true }).click()
   await expect(page.getByRole("dialog")).toHaveCount(0)
-  await card.getByRole("button", { name: "Rotate", exact: true }).click()
+  await keyAction("Rotate")
   // A failed rotation must not show credentials or silently dismiss the confirmation.
   await page.route(`**/api/keys/${exported.id}/rotate`, (route) =>
     route.fulfill({
@@ -491,7 +506,7 @@ test("automation key can be rotated, downloaded once, and revoked", async ({
   await page
     .getByRole("button", { name: "I saved the secret", exact: true })
     .click()
-  await expect(card.getByText(/^Last rotated /)).toBeVisible()
+  await expect(row.getByText(/^Rotated /)).toBeVisible()
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -503,12 +518,16 @@ test("automation key can be rotated, downloaded once, and revoked", async ({
   await expect(
     page.getByRole("button", { name: "Download JSON", exact: true }),
   ).toHaveCount(0)
-  await card.getByRole("button", { name: "Revoke", exact: true }).click()
+  await keyAction("Revoke")
   await page.getByRole("button", { name: "Revoke key", exact: true }).click()
-  await expect(card.getByText("Revoked", { exact: true })).toBeVisible()
+  await expect(row.getByText("Revoked", { exact: true })).toBeVisible()
   await expect(
-    card.getByRole("button", { name: "Rotate", exact: true }),
+    row.getByRole("button", { name: `Actions for ${keyName}`, exact: true }),
   ).toHaveCount(0)
+  await page.getByLabel("Filter by status", { exact: true }).click()
+  await page.getByRole("option", { name: "Revoked", exact: true }).click()
+  await expect(row).toBeVisible()
+  await expect(page.getByText(/^\d+ keys? of \d+$/)).toBeVisible()
   await page.goto("/activity")
   await expect(
     page.getByText("Rotated automation key", { exact: true }).first(),

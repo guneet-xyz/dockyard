@@ -77,13 +77,13 @@ Project/image settings and account roles are checked when issuing tokens. Caddy 
 
 ## Expiration, revocation, and rotation
 
-Keys can expire or be explicitly revoked. Creation defaults to 90 days; the API permits a future expiry up to one year, or `null` for no expiration. Use finite expiry wherever possible. The list shows the key owner, granted resources/actions, last successful authentication, last rotation, and status. Rotation resets the last-authenticated timestamp for the replacement secret.
+Keys can expire or be explicitly revoked. Creation defaults to 90 days; the API permits a future expiry up to one year, or `null` for no expiration. Use finite expiry wherever possible. The **Automation keys** page lists keys in a table showing each key's Docker username, status, owner (for admins), granted resources/actions, last successful authentication, expiry, creation, and last rotation. Keys with more than two grants show the first two and a **+N more** toggle. Active keys expiring within 14 days have their expiry highlighted. Search matches key names, Docker usernames, owners, and grant targets. Filter by status (and by owner for admins), sort by newest, name, most recently used, or soonest expiry, and page through 25 keys at a time. Rotation resets the last-authenticated timestamp for the replacement secret.
 
 Revocation blocks **new token requests** immediately. Distribution validates already-issued JWTs without calling back to the app, so previously issued authorization can remain valid for up to five minutes. JWT expiry is also capped at the key's expiry: it cannot outlive an expiring key. Previously downloaded images cannot be revoked.
 
 To rotate an active key in place:
 
-1. Open **Automation keys**, choose **Rotate** on the key, and confirm the warning.
+1. Open **Automation keys**, open the key's actions menu (**⋯**), choose **Rotate**, and confirm the warning.
 2. Save the new secret from the one-time dialog, or use **Download JSON**. The key ID, Docker username, owner, name, grants, and expiration stay unchanged; rotation does not extend its lifetime or permissions.
 3. Update the CI secret manager immediately and sign in again with Docker. The old secret cannot obtain new registry tokens once rotation succeeds. There is **no overlap/grace period** for the old secret.
 4. Confirm the workflow succeeds. Already-issued registry JWTs may remain valid for up to five minutes, capped by the key's expiry.
