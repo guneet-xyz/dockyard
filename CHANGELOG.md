@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/guneet-xyz/dockyard/compare/v0.3.1...v0.4.0) (2026-11-20)
+
+
+### Features
+
+* show automation keys in a searchable, sortable table ([#18](https://github.com/guneet-xyz/dockyard/issues/18)) ([2226afe](https://github.com/guneet-xyz/dockyard/commit/2226afe53d767b63ec0d532e2acd199344e3e407)), closes [#17](https://github.com/guneet-xyz/dockyard/issues/17)
+
 ## [0.3.1](https://github.com/guneet-xyz/dockyard/compare/v0.3.0...v0.3.1) (2026-11-14)
 
 
